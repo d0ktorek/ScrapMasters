@@ -22,6 +22,10 @@ class SaveSystem {
             currentCooldownTime: currentCooldownTime,
             rebirthCount: rebirthCount,
             
+            // Stan klikania i cooldown
+            canClick: canClick,
+            cooldownTimeLeft: this.getCurrentCooldownTimeLeft(),
+            
             // Stany upgradów
             upgradeLevels: [...upgradeLevels], // kopiujemy tablicę
             
@@ -63,6 +67,22 @@ class SaveSystem {
         return 0; // domyślnie scrap
     }
 
+    // Pobieranie aktualnego pozostałego czasu cooldown
+    getCurrentCooldownTimeLeft() {
+        const cooldownTimer = document.getElementById('cooldown-timer');
+        if (!cooldownTimer || canClick) {
+            return 0; // Brak cooldown lub gotowy do kliknięcia
+        }
+        
+        const timerText = cooldownTimer.textContent;
+        if (timerText === "READY") {
+            return 0;
+        }
+        
+        const timeLeft = parseFloat(timerText);
+        return isNaN(timeLeft) ? 0 : timeLeft;
+    }
+
     // Zapisywanie gry do localStorage
     saveGame() {
         try {
@@ -98,6 +118,10 @@ class SaveSystem {
             scrapPerClick = gameData.scrapPerClick || 1;
             currentCooldownTime = gameData.currentCooldownTime || 5.00;
             rebirthCount = gameData.rebirthCount || 0;
+
+            // Przywracanie stanu klikania i cooldown
+            canClick = gameData.canClick !== undefined ? gameData.canClick : true;
+            const savedCooldownTimeLeft = gameData.cooldownTimeLeft || 0;
 
             // Przywracanie upgradów
             if (gameData.upgradeLevels && Array.isArray(gameData.upgradeLevels)) {
@@ -145,6 +169,11 @@ class SaveSystem {
             // Aktualizacja interfejsu
             this.updateAllUI();
 
+            // Przywróć cooldown timer jeśli był aktywny
+            if (savedCooldownTimeLeft > 0) {
+                this.restoreCooldownTimer(savedCooldownTimeLeft);
+            }
+
             console.log('✅ Game loaded!', new Date().toLocaleTimeString());
             console.log('💰 Scraps:', scraps);
             console.log('🔄 Rebirth Count:', rebirthCount);
@@ -177,6 +206,37 @@ class SaveSystem {
                 counter.textContent = `Scrap: ${scraps}`;
             }, 1000);
         }
+    }
+
+    // Przywracanie cooldown timera po wczytaniu gry
+    restoreCooldownTimer(timeLeft) {
+        if (timeLeft <= 0 || canClick) {
+            return; // Nie ma potrzeby przywracania
+        }
+
+        canClick = false;
+        const cooldownBar = document.getElementById('cooldown-bar');
+        const cooldownTimer = document.getElementById('cooldown-timer');
+        
+        if (!cooldownBar || !cooldownTimer) return;
+
+        cooldownBar.style.width = '0%';
+        cooldownTimer.textContent = timeLeft.toFixed(2);
+
+        const cooldownInterval = setInterval(() => {
+            timeLeft -= 0.01;
+            const percentage = (currentCooldownTime - timeLeft) / currentCooldownTime * 100;
+            cooldownBar.style.width = `${percentage}%`;
+            cooldownTimer.textContent = timeLeft.toFixed(2);
+
+            if (timeLeft <= 0) {
+                clearInterval(cooldownInterval);
+                canClick = true;
+                cooldownTimer.textContent = "READY";
+            }
+        }, 10);
+        
+        console.log('🕐 Cooldown timer restored:', timeLeft.toFixed(2), 'seconds left');
     }
 
     // Obliczanie offline progress (ile gracz zarobił będąc offline)
@@ -271,12 +331,57 @@ class SaveSystem {
         }, 5000);
     }
 
+    // Odblokowuje elementy UI na podstawie postępu w grze
+    unlockUIElementsBasedOnProgress() {
+        // Odblokuj upgrade button jeśli masz wystarczająco scrapów
+        if (scraps >= 10 && upgradeBtn) {
+            upgradeBtn.style.display = "block";
+        }
+        
+        // Odblokuj autoclicker upgrade (upgrade index 1) jeśli pierwszy upgrade >= 2
+        const upgradeItem1 = document.querySelector('.upgrade-item[data-index="1"]');
+        if (upgradeItem1 && upgradeLevels[0] >= 2) {
+            upgradeItem1.classList.remove('hidden');
+        }
+        
+        // Odblokuj cooldown upgrade (upgrade index 2) jeśli autoclicker został kupiony
+        const upgradeItem2 = document.querySelector('.upgrade-item[data-index="2"]');
+        if (upgradeItem2 && upgradeLevels[1] >= 1) {
+            upgradeItem2.classList.remove('hidden');
+        }
+        
+        // Odblokuj book (scrapyard) jeśli cooldown upgrade >= 2
+        if (bookContainer && upgradeLevels[2] >= 2) {
+            bookContainer.classList.remove('hidden');
+        }
+        
+        // Odblokuj star button (rebirth) jeśli scrapyard kupiony lub już masz rebirthy
+        if (starBtn && (scrapyardPurchased || rebirthCount > 0)) {
+            starBtn.style.display = "block";
+        }
+        
+        // Odblokuj green upgrade button jeśli masz rebirthy
+        if (greenUpgradeBtn && rebirthCount > 0) {
+            greenUpgradeBtn.style.display = "block";
+        }
+        
+        // Odblokuj Mystery Book jeśli masz >= 3 rebirthy
+        if (mysteryBookContainer && rebirthCount >= 3) {
+            mysteryBookContainer.classList.remove('hidden');
+        }
+        
+        console.log('🔓 UI elements unlocked based on progress');
+    }
+
     // Aktualizacja całego interfejsu po wczytaniu
     updateAllUI() {
         // Aktualizacja counter
         counter.textContent = `Scrap: ${scraps}`;
         
-        // Aktualizacja wszystkich UI funkcji z głównego skryptu
+        // NAJPIERW odblokuj elementy na podstawie postępu
+        this.unlockUIElementsBasedOnProgress();
+        
+        // POTEM aktualizuj wszystkie UI funkcje z głównego skryptu
         if (typeof updateUpgradeInfo === 'function') updateUpgradeInfo();
         if (typeof updateScrapyardUI === 'function') updateScrapyardUI();
         if (typeof updateRebirthUI === 'function') updateRebirthUI();
@@ -288,14 +393,6 @@ class SaveSystem {
         // Aktualizacja rebirth count
         if (rebirthCountDisplay) {
             rebirthCountDisplay.textContent = `Rebirth: ${rebirthCount}`;
-        }
-
-        // Pokazanie/ukrycie elementów na podstawie rebirth count
-        if (bookContainer) {
-            bookContainer.classList.toggle('hidden', rebirthCount < 3);
-        }
-        if (mysteryBookContainer) {
-            mysteryBookContainer.classList.toggle('hidden', rebirthCount < 3);
         }
     }
 
@@ -347,8 +444,8 @@ class SaveSystem {
             // Resetuj wszystkie zmienne do wartości początkowych
             this.resetAllGameVariables();
             
-            // Wczytaj normalnie grę (czyli nową grę)
-            this.loadGame();
+            // Aktualizuj cały interfejs użytkownika jak w normalnej grze
+            this.updateAllUI();
             
             console.log('🔄 Game reset to initial state');
         } catch (error) {
@@ -358,12 +455,12 @@ class SaveSystem {
 
     // Funkcja resetująca wszystkie zmienne gry do wartości początkowych
     resetAllGameVariables() {
-        // Podstawowe zmienne
-        scraps = 0;
+        // Podstawowe zmienne - PRAWDZIWIE początkowe wartości (nie testowe)
+        scraps = 0;                        // Zaczynamy od 0, nie 1000000
         canClick = true;
         scrapPerClick = 1;
         currentCooldownTime = 5.00;
-        rebirthCount = 0;
+        rebirthCount = 0;                  // Zaczynamy od 0, nie 10000
         
         // Stany zakupów
         scrapyardPurchased = false;
@@ -379,9 +476,11 @@ class SaveSystem {
             scrapyardInterval = null;
         }
         
-        // Reset upgradów
-        for (let i = 0; i < upgradeLevels.length; i++) {
-            upgradeLevels[i] = 0;
+        // Reset upgradów - wszystkie poziomy na 0
+        if (typeof upgradeLevels !== 'undefined') {
+            for (let i = 0; i < upgradeLevels.length; i++) {
+                upgradeLevels[i] = 0;
+            }
         }
         
         // Reset green upgrades i bonusów
@@ -389,13 +488,146 @@ class SaveSystem {
         
         // Reset Mystery Book
         masterTokens = 0;
-        for (let i = 0; i < barrelLevels.length; i++) {
-            barrelLevels[i] = 0;
+        if (typeof barrelLevels !== 'undefined') {
+            for (let i = 0; i < barrelLevels.length; i++) {
+                barrelLevels[i] = 0;
+            }
         }
         
         // Resetuj obrazek do domyślnego
         if (document.getElementById('scrap-image')) {
             document.getElementById('scrap-image').src = 'assets/scrap.png';
+        }
+        
+        // Resetuj wszystkie koszty barrel do początkowych wartości
+        if (typeof barrelCosts !== 'undefined') {
+            const initialBarrelCosts = [1, 2, 4, 8, 16, 32];
+            for (let i = 0; i < barrelCosts.length && i < initialBarrelCosts.length; i++) {
+                barrelCosts[i] = initialBarrelCosts[i];
+            }
+        }
+        
+        // Resetuj widoczność elementów UI - ukryj wszystko co powinno być ukryte na początku
+        if (typeof upgradeBtn !== 'undefined' && upgradeBtn) {
+            upgradeBtn.style.display = "none";
+        }
+        if (typeof starBtn !== 'undefined' && starBtn) {
+            starBtn.style.display = "none";
+        }
+        if (typeof greenUpgradeBtn !== 'undefined' && greenUpgradeBtn) {
+            greenUpgradeBtn.style.display = "none";
+        }
+        
+        // Ukryj upgrade items które powinny być ukryte na początku
+        const upgradeItem1 = document.querySelector('.upgrade-item[data-index="1"]');
+        if (upgradeItem1) {
+            upgradeItem1.classList.add('hidden');
+        }
+        
+        const upgradeItem2 = document.querySelector('.upgrade-item[data-index="2"]');
+        if (upgradeItem2) {
+            upgradeItem2.classList.add('hidden');
+        }
+        
+        // Ukryj książkę i Mystery Book
+        if (typeof bookContainer !== 'undefined' && bookContainer) {
+            bookContainer.classList.add('hidden');
+        }
+        if (typeof mysteryBookContainer !== 'undefined' && mysteryBookContainer) {
+            mysteryBookContainer.classList.add('hidden');
+        }
+    }
+
+    // Funkcja naprawiająca błędy w grze i resetująca nieprawidłowe wartości
+    fixGame() {
+        try {
+            console.log('🔧 Starting game fix...');
+            
+            // Naprawa podstawowych wartości
+            if (scraps < 0) scraps = 0;
+            if (scrapPerClick < 1) scrapPerClick = 1;
+            if (currentCooldownTime < 0.10) currentCooldownTime = 0.10;
+            if (currentCooldownTime > 5.00) currentCooldownTime = 5.00;
+            if (rebirthCount < 0) rebirthCount = 0;
+            
+            // Naprawa upgradów - ustaw maksymalne limity
+            if (typeof upgradeLevels !== 'undefined') {
+                // Upgrade 0: max 20 poziomów
+                if (upgradeLevels[0] > 20) upgradeLevels[0] = 20;
+                if (upgradeLevels[0] < 0) upgradeLevels[0] = 0;
+                
+                // Upgrade 1 (autoclicker): max 1 poziom
+                if (upgradeLevels[1] > 1) upgradeLevels[1] = 1;
+                if (upgradeLevels[1] < 0) upgradeLevels[1] = 0;
+                
+                // Upgrade 2: max 30 poziomów
+                if (upgradeLevels[2] > 30) upgradeLevels[2] = 30;
+                if (upgradeLevels[2] < 0) upgradeLevels[2] = 0;
+            }
+            
+            // Naprawa barrel levels
+            if (typeof barrelLevels !== 'undefined') {
+                for (let i = 0; i < barrelLevels.length; i++) {
+                    if (barrelLevels[i] > 5) barrelLevels[i] = 5; // max 5 poziomów
+                    if (barrelLevels[i] < 0) barrelLevels[i] = 0;
+                }
+            }
+            
+            // Naprawa master tokens
+            if (masterTokens < 0) masterTokens = 0;
+            
+            // Naprawa scrapBonusPercent
+            if (scrapBonusPercent < 0) scrapBonusPercent = 0;
+            if (scrapBonusPercent > 10) scrapBonusPercent = 10; // max 10%
+            
+            // Naprawa barrel costs - przywróć do normalnych wartości jeśli są zbyt wysokie
+            if (typeof barrelCosts !== 'undefined') {
+                const maxBarrelCosts = [1024, 2048, 4096, 8192, 16384, 32768]; // maksymalne rozsądne koszty
+                for (let i = 0; i < barrelCosts.length; i++) {
+                    if (barrelCosts[i] > maxBarrelCosts[i]) {
+                        // Przywróć do początkowego kosztu i podnieś zgodnie z poziomem
+                        const initialCost = [1, 2, 4, 8, 16, 32][i];
+                        barrelCosts[i] = initialCost * Math.pow(2, barrelLevels[i]);
+                    }
+                    if (barrelCosts[i] < 1) barrelCosts[i] = [1, 2, 4, 8, 16, 32][i];
+                }
+            }
+            
+            // Wyczyść błędne intervale
+            if (autoClickerInterval && upgradeLevels[1] === 0) {
+                clearInterval(autoClickerInterval);
+                autoClickerInterval = null;
+            }
+            
+            if (scrapyardInterval && !scrapyardPurchased) {
+                clearInterval(scrapyardInterval);
+                scrapyardInterval = null;
+            }
+            
+            // Przywróć intervale jeśli powinny działać
+            if (!autoClickerInterval && upgradeLevels[1] > 0) {
+                this.restoreAutoClicker();
+            }
+            
+            if (!scrapyardInterval && scrapyardPurchased) {
+                this.restoreScrapyardInterval();
+            }
+            
+            // Zapisz naprawione dane
+            this.saveGame();
+            
+            // Odśwież cały interfejs
+            this.updateAllUI();
+            
+            console.log('✅ Game fixed successfully!');
+            console.log('💰 Scraps:', scraps);
+            console.log('🔧 Upgrade Levels:', upgradeLevels);
+            console.log('🔄 Rebirth Count:', rebirthCount);
+            console.log('🎯 Scrapyard Purchased:', scrapyardPurchased);
+            console.log('🎪 Master Tokens:', masterTokens);
+            
+        } catch (error) {
+            console.error('❌ Error during game fix:', error);
         }
     }
 
@@ -462,6 +694,11 @@ function exportSave() {
     saveSystem.exportSave();
 }
 
+function Fix() {
+    saveSystem.fixGame();
+    console.log('🎯 Fix() completed! All game errors should be resolved.');
+}
+
 // Automatyczne uruchomienie systemu po załadowaniu DOM
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
@@ -478,6 +715,8 @@ window.saveGame = saveGame;
 window.loadGame = loadGame;
 window.resetSave = resetSave;
 window.exportSave = exportSave;
+window.Fix = Fix;
 
 console.log('💾 ScrapMasters Save System loaded!');
-console.log('🔧 Available console commands: saveGame(), loadGame(), resetSave(), exportSave()');
+console.log('🔧 Available console commands: saveGame(), loadGame(), resetSave(), exportSave(), Fix()');
+console.log('🎯 Use Fix() to repair game errors and refresh the interface!');

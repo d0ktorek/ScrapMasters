@@ -9,6 +9,17 @@ body {
     position: relative;
 }
 
+.version-info {
+    position: fixed;
+    bottom: 10px;
+    right: 10px;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.6);
+    font-family: Arial, sans-serif;
+    z-index: 1000;
+    pointer-events: none;
+}
+
 .game-content {
     display: flex;
     flex-direction: column;

@@ -196,9 +196,14 @@ function buyUpgrade(index) {
         }
     } 
     else if (index === 1) {
+        // Sprawdź czy autoclicker już na max poziomie (1)
+        if (upgradeLevels[1] >= 1) {
+            return; // Już na max poziomie, nie pozwalaj na kolejny upgrade
+        }
+        
         if (upgradeLevels[2] === 0) {
-    document.querySelector('.upgrade-item[data-index="2"]').classList.remove('hidden');
-}
+            document.querySelector('.upgrade-item[data-index="2"]').classList.remove('hidden');
+        }
         
         if (scraps >= upgrade2Cost) {
             scraps -= upgrade2Cost;
