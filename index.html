@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scrap Masters</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="game-content">
+        <div id="counter">Scrap: 0</div>
+        <img id="scrap-image" src="assets/scrap.png" alt="Scrap">
+        <div id="cooldown-container">
+            <div id="cooldown-bar"></div>
+            <div id="cooldown-timer">5.00</div>
+        </div>
+<div id="bottom-buttons">
+    <div id="greenupgrade-container">
+        <img id="greenupgrade-btn" src="assets/greenupgrade.png" alt="Green Upgrade">
+    </div>
+    <div id="book-container" class="hidden">
+        <img id="book-btn" src="assets/book.png" alt="Book" title="Skills Book">
+    </div>
+    <div id="mysterybook-container" class="hidden">
+        <img id="mysterybook-btn" src="assets/mysterybook.png" alt="Mystery Book" title="Mystery Book">
+    </div>
+    <div id="upgrade-container">
+        <img id="upgrade-btn" src="assets/update.png" alt="Upgrade">
+    </div>
+    <div id="star-container">
+        <img id="star-btn" src="assets/star.png" alt="Rebirth" title="Rebirth">
+    </div>
+</div>
+
+    <!-- Okno upgrade'ów -->
+<div id="upgrade-window" class="hidden">
+    <div class="upgrade-grid">
+        <div class="upgrade-item" data-index="0">
+            <div class="upgrade-title">+2 Scrap/click</div>
+            <div class="upgrade-level"><span id="upgrade-level-0">0</span>/20</div>
+            <div class="upgrade-cost" id="upgrade-cost-0">5 Scrap</div>
+        </div>
+        <div class="upgrade-item hidden" data-index="1">
+            <div class="upgrade-title">Autoclicker (1 scrap/s)</div>
+            <div class="upgrade-level"><span id="upgrade-level-1">0</span>/1</div>
+            <div class="upgrade-cost" id="upgrade-cost-1">50 Scrap</div>
+        </div>
+        <div class="upgrade-item hidden" data-index="2">
+            <div class="upgrade-title">-0.10 Cooldown</div>
+            <div class="upgrade-level"><span id="upgrade-level-2">0</span>/30</div>
+            <div class="upgrade-cost" id="upgrade-cost-2">30 Scrap</div>
+</div>
+    </div>
+    <div id="close-upgrades">✕</div>
+</div>
+    </body>
+<div id="scrapyard-window" class="hidden">
+    <div class="scrapyard-content">
+        <h3>ScrapYard</h3>
+        <div class="scrapyard-description">
+            ScrapYard 100 Scrap/min<br>
+        </div>
+        <img id="scrapyard-image" src="assets/scrapyard.png" alt="ScrapYard">
+        <div id="scrapyard-cost">2000 Scrap</div>
+        <button id="buy-scrapyard">Buy</button>
+    </div>
+    <div id="close-scrapyard">✕</div>
+</div>
+
+<!-- Okno rebirth - przeniesione na zewnątrz -->
+<div id="rebirth-window" class="hidden">
+    <div class="rebirth-content">
+        <h3>Rebirth</h3>
+        <div class="rebirth-description">
+            Perform rebirth to reset your progress and gain a rebirth point.<br>
+            Required: 4000 Scrap<br><br>
+            <strong>WARNING:</strong> This will reset all your upgrades and scrap!
+        </div>
+        <div id="rebirth-count">Rebirth: 0</div>
+        <button id="confirm-rebirth">Perform Rebirth</button>
+    </div>
+    <div id="close-rebirth">✕</div>
+</div>
+
+<!-- Okno greenupgrade -->
+<div id="greenupgrade-window" class="hidden">
+    <div class="greenupgrade-content">
+        <h3>Zielony Upgrade</h3>
+        <div class="greenupgrade-description">
+            You can add description or future upgrades here!
+        </div>
+        <div class="greenupgrade-grid">
+    <div class="greenupgrade-item">
+        <img src="assets/scrap.png" alt="Scrap">
+        <button class="greenupgrade-button">Equip</button>
+        <div class="greenupgrade-text">+0% Scrap</div>
+    </div>
+    <div class="greenupgrade-item">
+        <img src="assets/barrel1.png" alt="Barrel 1">
+        <button class="greenupgrade-button" data-rebirth="2">Equip</button>
+        <div class="greenupgrade-text">+2% Scrap</div>
+    </div>
+    <div class="greenupgrade-item">
+        <img src="assets/barrel2.png" alt="Barrel 2">
+        <button class="greenupgrade-button" data-rebirth="3">Equip</button>
+        <div class="greenupgrade-text">+4% Scrap</div>
+    </div>
+    <div class="greenupgrade-item">
+        <img src="assets/barrel3.png" alt="Barrel 3">
+        <button class="greenupgrade-button" data-rebirth="4">Equip</button>
+        <div class="greenupgrade-text">+6% Scrap</div>
+    </div>
+    <div class="greenupgrade-item">
+        <img src="assets/barrel4.png" alt="Barrel 4">
+        <button class="greenupgrade-button" data-rebirth="5">Equip</button>
+        <div class="greenupgrade-text">+8% Scrap</div>
+    </div>
+    <div class="greenupgrade-item">
+        <img src="assets/barrel5.png" alt="Barrel 5">
+        <button class="greenupgrade-button" data-rebirth="6">Equip</button>
+        <div class="greenupgrade-text">+10% Scrap</div>
+    </div>
+</div>
+        <div id="close-greenupgrade">✕</div>
+    </div>
+</div>
+
+<!-- Okno Mystery Book -->
+<div id="mysterybook-window" class="hidden">
+    <div class="mysterybook-content">
+        <h3>Mystery Book</h3>
+        <div class="mysterybook-description">
+            Here you can upgrade barrels for Master Tokens!
+        </div>
+        <div class="mysterybook-grid">
+            <div class="mysterybook-item">
+                <img src="assets/scrap.png" alt="Scrap">
+                <button class="mysterybook-button" data-cost="1">Upgrade</button>
+                <div class="mysterybook-level">Level: 0/5</div>
+                <div class="mysterybook-cost">Cost: 1 Master Token</div>
+            </div>
+            <div class="mysterybook-item">
+                <img src="assets/barrel1.png" alt="Barrel 1">
+                <button class="mysterybook-button" data-cost="2">Upgrade</button>
+                <div class="mysterybook-level">Level: 0/5</div>
+                <div class="mysterybook-cost">Cost: 2 Master Token</div>
+            </div>
+            <div class="mysterybook-item">
+                <img src="assets/barrel2.png" alt="Barrel 2">
+                <button class="mysterybook-button" data-cost="4">Upgrade</button>
+                <div class="mysterybook-level">Level: 0/5</div>
+                <div class="mysterybook-cost">Cost: 4 Master Token</div>
+            </div>
+            <div class="mysterybook-item">
+                <img src="assets/barrel3.png" alt="Barrel 3">
+                <button class="mysterybook-button" data-cost="8">Upgrade</button>
+                <div class="mysterybook-level">Level: 0/5</div>
+                <div class="mysterybook-cost">Cost: 8 Master Token</div>
+            </div>
+            <div class="mysterybook-item">
+                <img src="assets/barrel4.png" alt="Barrel 4">
+                <button class="mysterybook-button" data-cost="16">Upgrade</button>
+                <div class="mysterybook-level">Level: 0/5</div>
+                <div class="mysterybook-cost">Cost: 16 Master Token</div>
+            </div>
+            <div class="mysterybook-item">
+                <img src="assets/barrel5.png" alt="Barrel 5">
+                <button class="mysterybook-button" data-cost="32">Upgrade</button>
+                <div class="mysterybook-level">Level: 0/5</div>
+                <div class="mysterybook-cost">Cost: 32 Master Token</div>
+            </div>
+        </div>
+        <div id="master-token-display">
+            <img src="assets/master.png" alt="Master Tokens">
+            <div id="master-token-count">Master Tokens: 0</div>
+        </div>
+        <div id="close-mysterybook">✕</div>
+    </div>
+</div>
+
+    <script src="script.js"></script>
+    <script src="savescript.js"></script>
+</body>
+</html>
