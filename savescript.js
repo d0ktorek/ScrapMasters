@@ -76,8 +76,24 @@ class SaveSystem {
             lastSaveTime: Date.now(),
             
             // Active storm state (czy burza była w trakcie) – do odtworzenia
-            stormActive: (typeof stormActive !== 'undefined') ? stormActive : false
+            stormActive: (typeof stormActive !== 'undefined') ? stormActive : false,
+
+            // Wersja zapisu
+            saveVersion: 1.4
         };
+    }
+
+    // Zapisywanie gry do localStorage
+    saveGame() {
+        try {
+            const gameData = this.getGameData();
+            // (saveVersion już dodany w getGameData)
+            localStorage.setItem(this.saveKey, JSON.stringify(gameData));
+            return true;
+        } catch (error) {
+            console.error('❌ Error saving game:', error);
+            return false;
+        }
     }
 
     // Wczytywanie gry z localStorage
