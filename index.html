@@ -10,7 +10,8 @@
     <div class="version-info">Version 1.1</div>
     <div class="game-content">
         <div id="counter">Scrap: 0</div>
-        <div id="brick-counter" class="hidden" style="font-size: 24px; margin-bottom: 15px; color: #e67e22;">Brick: 0</div>
+    <div id="brick-counter" class="hidden" style="font-size: 24px; margin-bottom: 15px; color: #e67e22;">Brick: 0</div>
+    <div id="tiles-counter" class="hidden" style="font-size: 24px; margin-bottom: 15px; color: #9b59b6;">Tires: 0</div>
         <img id="scrap-image" src="assets/scrap.png" alt="Scrap">
         <div id="cooldown-container">
             <div id="cooldown-bar"></div>
@@ -28,6 +29,9 @@
     </div>
     <div id="tree-container" class="hidden">
         <img id="tree-btn" src="assets/tree.png" alt="Skill Tree" title="Skill Tree">
+    </div>
+    <div id="blueupgrade-container" class="hidden">
+        <img id="blueupgrade-btn" src="assets/blueupgrade.png" alt="Blue Upgrade" title="Blue Upgrades">
     </div>
     <div id="upgrade-container">
         <img id="upgrade-btn" src="assets/update.png" alt="Upgrade">
@@ -64,12 +68,13 @@
 </div>
 
 <div id="scrapyard-window" class="hidden">
-    <div class="scrapyard-content" style="display: flex; gap: 30px;">
+    <div class="scrapyard-content">
         <!-- ScrapYard Section - Left Side -->
-        <div class="scrapyard-left" style="flex: 1;">
+        <div class="scrapyard-left">
             <h3>ScrapYard</h3>
             <div class="scrapyard-description">
                 ScrapYard 100 Scrap/min<br>
+                <small style="visibility: hidden;">Spacing element</small>
             </div>
             <img id="scrapyard-image" src="assets/scrapyard.png" alt="ScrapYard">
             <div id="scrapyard-cost">2000 Scrap</div>
@@ -77,17 +82,35 @@
         </div>
         
         <!-- Vertical Separator -->
-        <div id="brickyard-separator" class="hidden" style="width: 2px; background: #34495e; margin: 0 10px;"></div>
+        <div id="brickyard-separator" class="hidden"></div>
         
         <!-- BrickYard Section - Right Side -->
-        <div id="brickyard-section" class="hidden" style="flex: 1;">
+        <div id="brickyard-section" class="hidden">
             <h3>BrickYard</h3>
             <div class="brickyard-description">
                 +1 Brick<br>
                 <small>Cost: 10 Scrap + 5 Master Tokens</small>
             </div>
-            <img id="brickyard-image" src="assets/brickyard.png" alt="BrickYard" style="width:64px;height:64px; cursor:pointer;" onclick="buyBrick()">
+            <img id="brickyard-image" src="assets/brickyard.png" alt="BrickYard">
             <div id="brickyard-cost">10 Scrap + 5 Master Tokens</div>
+            <button id="buy-brick">Buy 1 Brick</button>
+        </div>
+
+        <!-- Vertical Separator for TilesYard -->
+        <div id="tilesyard-separator" class="hidden"></div>
+
+        <!-- TilesYard Section - Third Option -->
+        <div id="tilesyard-section" class="hidden">
+            <h3>TiresYard</h3>
+            <div class="tilesyard-description">
+                Collect more tires by picking 1<br>
+                <small>(+1 Tires per 1 level, 1 level = 10 Tiers)</small>
+            </div>
+            <img id="tilesyard-image" src="assets/tilesyard.png" alt="TilesYard">
+            <div id="tilesyard-status">Unlocked</div>
+            <div id="tiles-upgrade-level">Tier: 0/10</div>
+            <div id="tiles-level-label">Level: 0</div>
+            <button id="tiles-upgrade-btn">Upgrade</button>
         </div>
     </div>
     <div id="close-scrapyard">✕</div>
@@ -96,13 +119,14 @@
 <!-- Okno rebirth - przeniesione na zewnątrz -->
 <div id="rebirth-window" class="hidden">
     <div class="rebirth-content">
-        <h3>Rebirth</h3>
+    <h3>Rebirth</h3>
+        <div id="rebirth-count" style="font-size:16px;color:#f1c40f;margin:6px 0 10px;">Rebirth: 0</div>
         <div class="rebirth-description">
-            Perform rebirth to reset your progress and gain a rebirth point.<br>
+            Rebirth resets your progress and grants a rebirth point.<br>
             Required: 4000 Scrap<br><br>
             <strong>WARNING:</strong> This will reset all your upgrades and scrap!
         </div>
-        <button id="confirm-rebirth">Perform Rebirth</button>
+        <button id="confirm-rebirth">Rebirth</button>
     </div>
     <div id="close-rebirth">✕</div>
 </div>
@@ -110,41 +134,41 @@
 <!-- Okno greenupgrade -->
 <div id="greenupgrade-window" class="hidden">
     <div class="greenupgrade-content">
-        <h3>Barrel Selector</h3>
+    <h3>Barrel Selector</h3>
         <div class="greenupgrade-description">
-            Select Barrel to increase your Scrap production.<br>
-            Each Barrel has a different Scrap production bonus.<br>
+            Select a barrel to increase your Scrap production.<br>
+            Each barrel has a different Scrap/click bonus.<br>
         </div>
         <div class="greenupgrade-grid">
     <div class="greenupgrade-item">
         <img src="assets/scrap.png" alt="Scrap">
         <button class="greenupgrade-button">Equip</button>
-        <div class="greenupgrade-text">+1 Scrap/Click</div>
+        <div class="greenupgrade-text">+0 Scrap/Click</div>
     </div>
     <div class="greenupgrade-item">
         <img src="assets/barrel1.png" alt="Barrel 1">
         <button class="greenupgrade-button">Equip</button>
-        <div class="greenupgrade-text">+2 Scrap/Click</div>
+        <div class="greenupgrade-text">+1 Scrap/Click</div>
     </div>
     <div class="greenupgrade-item">
         <img src="assets/barrel2.png" alt="Barrel 2">
         <button class="greenupgrade-button">Equip</button>
-        <div class="greenupgrade-text">+3 Scrap/Click</div>
+        <div class="greenupgrade-text">+2 Scrap/Click</div>
     </div>
     <div class="greenupgrade-item">
         <img src="assets/barrel3.png" alt="Barrel 3">
         <button class="greenupgrade-button">Equip</button>
-        <div class="greenupgrade-text">+4 Scrap/Click</div>
+        <div class="greenupgrade-text">+3 Scrap/Click</div>
     </div>
     <div class="greenupgrade-item">
         <img src="assets/barrel4.png" alt="Barrel 4">
         <button class="greenupgrade-button">Equip</button>
-        <div class="greenupgrade-text">+5 Scrap/Click</div>
+        <div class="greenupgrade-text">+4 Scrap/Click</div>
     </div>
     <div class="greenupgrade-item">
         <img src="assets/barrel5.png" alt="Barrel 5">
         <button class="greenupgrade-button">Equip</button>
-        <div class="greenupgrade-text">+6 Scrap/Click</div>
+        <div class="greenupgrade-text">+5 Scrap/Click</div>
     </div>
 </div>
         <div id="close-greenupgrade">✕</div>
@@ -156,7 +180,7 @@
     <div class="mysterybook-content">
         <h3>Mystery Book</h3>
         <div class="mysterybook-description">
-            Here you can upgrade barrels for Master Tokens!
+            Upgrade barrels using Master Tokens.
         </div>
         <div class="mysterybook-grid">
             <div class="mysterybook-item">
@@ -204,10 +228,44 @@
     </div>
 </div>
 
+<!-- Okno Blue Upgrades -->
+<div id="blueupgrade-window" class="hidden">
+    <div class="greenupgrade-content">
+    <h3>Better Upgrades</h3>
+        <div class="greenupgrade-description">
+            Spend Tires on permanent upgrades.
+        </div>
+    <div id="blueupgrade-grid">
+            <!-- Better Upgrades (Blue) -->
+            <div class="blueupgrade-item" id="blue-better-upgrades" style="cursor:pointer;">
+                <div class="blueupgrade-title" style="font-size:16px;color:#4aa3ff;font-weight:bold;">More Scrap</div>
+                <div class="blueupgrade-level" id="blue-better-level" style="font-size:14px;">Level: 0/16</div>
+                <div class="blueupgrade-effect" id="blue-better-effect" style="font-size:13px;color:#ccc;">Current: x1.00 ( +0.25x / lvl )</div>
+                <div class="blueupgrade-cost" id="blue-better-cost" style="font-size:13px;color:#9b59b6;">Cost: 100 Tires</div>
+            </div>
+                <!-- The Tires (Blue) -->
+                <div class="blueupgrade-item" id="blue-tires-upgrade" style="cursor:pointer;">
+                    <div class="blueupgrade-title" style="font-size:16px;color:#4aa3ff;font-weight:bold;">The Tires</div>
+                    <div class="blueupgrade-level" id="blue-tires-level" style="font-size:14px;">Level: 0/30</div>
+                    <div class="blueupgrade-effect" id="blue-tires-effect" style="font-size:13px;color:#ccc;">Current: x1 → x100 ( +100 / lvl )</div>
+                    <div class="blueupgrade-cost" id="blue-tires-cost" style="font-size:13px;color:#9b59b6;">Cost: 35000 Tires</div>
+                </div>
+                <!-- The Earnings (Blue) -->
+                <div class="blueupgrade-item" id="blue-earnings-upgrade" style="cursor:pointer;">
+                    <div class="blueupgrade-title" style="font-size:16px;color:#4aa3ff;font-weight:bold;">The Earnings</div>
+                    <div class="blueupgrade-level" id="blue-earnings-level" style="font-size:14px;">Level: 0/10</div>
+                    <div class="blueupgrade-effect" id="blue-earnings-effect" style="font-size:13px;color:#ccc;">Current: +0 Scrap/click (+1000 / lvl)</div>
+                    <div class="blueupgrade-cost" id="blue-earnings-cost" style="font-size:13px;color:#9b59b6;">Cost: 3000 Tires</div>
+                </div>
+        </div>
+        <div id="close-blueupgrade">✕</div>
+    </div>
+    
+</div>
 <!-- Okno Tree -->
 <div id="tree-window" class="hidden">
     <div class="tree-content">
-        <h3>Skill Tree</h3>
+    <h3>Skill Tree</h3>
         <div class="tree-description">
             Unlock powerful upgrades with Master Tokens!
         </div>
@@ -221,7 +279,7 @@
 <!-- Okno informacyjne dla Tree upgrade -->
 <div id="tree-info-window" class="hidden">
     <div class="tree-info-content improved-ui">
-        <h3 id="tree-info-title">Better Scrapyard</h3>
+    <h3 id="tree-info-title">Better Scrapyard</h3>
         <div class="tree-info-description" id="tree-info-description">
             Upgrade your Scrapyard from 100 Scrap per minute to 100 Scrap per second!<br>
             <span style="font-size: 1.1em; color: #e67e22; font-weight: bold;">Cost: 25 Brick</span>
@@ -233,5 +291,8 @@
 
     <script src="script.js"></script>
     <script src="savescript.js"></script>
+    <script src="admincommands.js"></script>
+    <!-- Storm Timer (appears after Storm upgrade purchased) -->
+    <div id="storm-timer" style="position:fixed;left:12px;bottom:10px;font-family:monospace;font-size:18px;background:rgba(0,0,0,0.45);color:#fff;padding:4px 10px;border-radius:6px;display:none;z-index:5000;">04:00</div>
 </body>
 </html>

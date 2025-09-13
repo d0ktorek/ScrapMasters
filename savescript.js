@@ -51,165 +51,105 @@ class SaveSystem {
             // Tree upgrades dane
             treeUpgrades: [...treeUpgrades],
             selectedTreeUpgrade: selectedTreeUpgrade, // Dodano wybrany tree upgrade
+
+            // Blue upgrades
+            blueUpgrades: {
+                better: { level: blueUpgrades && blueUpgrades.better ? blueUpgrades.better.level : 0 },
+                tires: { level: blueUpgrades && blueUpgrades.tires ? blueUpgrades.tires.level : 0 },
+                earnings: { level: blueUpgrades && blueUpgrades.earnings ? blueUpgrades.earnings.level : 0 }
+            },
+
+            // Storm system
+            storm: {
+                nextStormTime: (typeof nextStormTime !== 'undefined') ? nextStormTime : null,
+                purchased: (typeof stormPurchased !== 'undefined') ? stormPurchased : false
+            },
+            
+            // Tire system
+            tires: tires,
+            tiles: tiles, // New currency
+            tilesTier: typeof tilesTier !== 'undefined' ? tilesTier : 0,
+            tilesLevel: typeof tilesLevel !== 'undefined' ? tilesLevel : 0,
+            hasTireInterval: tireInterval !== null,
             
             // Czas ostatniego zapisu
             lastSaveTime: Date.now(),
             
-            // Wersja save'a (na przyszłość dla kompatybilności)
-            saveVersion: 1.1 // Zwiększono wersję
+            // Active storm state (czy burza była w trakcie) – do odtworzenia
+            stormActive: (typeof stormActive !== 'undefined') ? stormActive : false
         };
-    }
-
-    // Określenie aktualnego indeksu beczki na podstawie obrazka
-    getCurrentBarrelIndex() {
-        const scrapImageSrc = document.getElementById('scrap-image').src;
-        const barrelImages = ["assets/scrap.png", "assets/barrel1.png", "assets/barrel2.png", "assets/barrel3.png", "assets/barrel4.png", "assets/barrel5.png"];
-        
-        for (let i = 0; i < barrelImages.length; i++) {
-            if (scrapImageSrc.includes(barrelImages[i].replace('assets/', ''))) {
-                return i;
-            }
-        }
-        return 0; // domyślnie scrap
-    }
-
-    // Pobieranie aktualnego pozostałego czasu cooldown
-    getCurrentCooldownTimeLeft() {
-        const cooldownTimer = document.getElementById('cooldown-timer');
-        if (!cooldownTimer || canClick) {
-            return 0; // Brak cooldown lub gotowy do kliknięcia
-        }
-        
-        const timerText = cooldownTimer.textContent;
-        if (timerText === "READY") {
-            return 0;
-        }
-        
-        const timeLeft = parseFloat(timerText);
-        return isNaN(timeLeft) ? 0 : timeLeft;
-    }
-
-    // Zapisywanie gry do localStorage
-    saveGame() {
-        try {
-            const gameData = this.getGameData();
-            localStorage.setItem(this.saveKey, JSON.stringify(gameData));
-            console.log('✅ Game saved!', new Date().toLocaleTimeString());
-            return true;
-        } catch (error) {
-            console.error('❌ Error saving game:', error);
-            return false;
-        }
     }
 
     // Wczytywanie gry z localStorage
     loadGame() {
         try {
             const savedData = localStorage.getItem(this.saveKey);
-            
             if (!savedData) {
                 console.log('📝 No saved game found - starting new game');
                 return false;
             }
-
             const gameData = JSON.parse(savedData);
-            
-            // Sprawdzenie wersji save'a
+            const originalVersion = gameData.saveVersion || 1.0;
             if (!gameData.saveVersion) {
                 console.log('⚠️ Old save format - errors may occur');
             }
-
-            // Przywracanie podstawowych danych
             scraps = gameData.scraps || 0;
             scrapPerClick = gameData.scrapPerClick || 1;
             currentCooldownTime = gameData.currentCooldownTime || 5.00;
             rebirthCount = gameData.rebirthCount || 0;
-
-            // Przywracanie stanu klikania i cooldown
             canClick = gameData.canClick !== undefined ? gameData.canClick : true;
             const savedCooldownTimeLeft = gameData.cooldownTimeLeft || 0;
-
-            // Przywracanie upgradów
             if (gameData.upgradeLevels && Array.isArray(gameData.upgradeLevels)) {
                 for (let i = 0; i < gameData.upgradeLevels.length; i++) {
-                    if (i < upgradeLevels.length) {
-                        upgradeLevels[i] = gameData.upgradeLevels[i];
-                    }
+                    if (i < upgradeLevels.length) upgradeLevels[i] = gameData.upgradeLevels[i];
                 }
             }
-
-            // Przywracanie stanów
             scrapyardPurchased = gameData.scrapyardPurchased || false;
             scrapBonusPercent = gameData.scrapBonusPercent || 0;
             masterTokens = gameData.masterTokens || 0;
             bricks = gameData.bricks || 0;
+            tires = gameData.tires || 0;
+            tiles = gameData.tiles || 0;
+            if (typeof tilesTier !== 'undefined') tilesTier = gameData.tilesTier || 0;
+            if (typeof tilesLevel !== 'undefined') tilesLevel = gameData.tilesLevel || 0;
             selectedTreeUpgrade = gameData.selectedTreeUpgrade || 0;
-
-            // Przywracanie barrel levels
+            if (gameData.blueUpgrades && typeof blueUpgrades !== 'undefined') {
+                if (gameData.blueUpgrades.better && blueUpgrades.better) blueUpgrades.better.level = gameData.blueUpgrades.better.level || 0;
+                if (gameData.blueUpgrades.tires && blueUpgrades.tires) blueUpgrades.tires.level = gameData.blueUpgrades.tires.level || 0;
+                if (gameData.blueUpgrades.earnings && blueUpgrades.earnings) blueUpgrades.earnings.level = gameData.blueUpgrades.earnings.level || 0;
+            }
             if (gameData.barrelLevels && Array.isArray(gameData.barrelLevels)) {
-                for (let i = 0; i < gameData.barrelLevels.length; i++) {
-                    if (i < barrelLevels.length) {
-                        barrelLevels[i] = gameData.barrelLevels[i];
-                    }
-                }
+                for (let i = 0; i < gameData.barrelLevels.length; i++) if (i < barrelLevels.length) barrelLevels[i] = gameData.barrelLevels[i];
             }
-
-            // Przywracanie barrel costs
             if (gameData.barrelCosts && Array.isArray(gameData.barrelCosts)) {
-                for (let i = 0; i < gameData.barrelCosts.length; i++) {
-                    if (i < barrelCosts.length) {
-                        barrelCosts[i] = gameData.barrelCosts[i];
-                    }
-                }
+                for (let i = 0; i < gameData.barrelCosts.length; i++) if (i < barrelCosts.length) barrelCosts[i] = gameData.barrelCosts[i];
             }
-
-            // Przywracanie tree upgrades
             if (gameData.treeUpgrades && Array.isArray(gameData.treeUpgrades)) {
-                for (let i = 0; i < gameData.treeUpgrades.length; i++) {
-                    if (i < treeUpgrades.length && typeof treeUpgrades !== 'undefined') {
-                        treeUpgrades[i].level = gameData.treeUpgrades[i].level != undefined ? gameData.treeUpgrades[i].level : 0;
-                    }
-                }
+                for (let i = 0; i < gameData.treeUpgrades.length; i++) if (i < treeUpgrades.length) treeUpgrades[i].level = gameData.treeUpgrades[i].level != undefined ? gameData.treeUpgrades[i].level : 0;
             }
-
-            // Przywracanie auto clickera
-            if (gameData.hasAutoClicker && !autoClickerInterval) {
-                this.restoreAutoClicker();
+            if (gameData.hasTireInterval && treeUpgrades[1] && treeUpgrades[1].level > 0 && typeof startTireInterval === 'function') startTireInterval();
+            if (gameData.storm) {
+                if (typeof stormPurchased !== 'undefined') stormPurchased = !!gameData.storm.purchased;
+                if (typeof nextStormTime !== 'undefined') nextStormTime = gameData.storm.nextStormTime || null;
             }
-
-            // Przywracanie scrapyard interval
-            if (gameData.hasScrapyardInterval && scrapyardPurchased && !scrapyardInterval) {
-                this.restoreScrapyardInterval();
+            if (typeof gameData.stormActive !== 'undefined' && gameData.stormActive && typeof spawnStormCloud === 'function') {
+                console.log('⛈️ Restoring active storm from save...');
+                spawnStormCloud();
             }
-
-            // Przywracanie obrazka beczki
-            if (gameData.selectedBarrelIndex !== undefined) {
-                updateBarrelImage(gameData.selectedBarrelIndex);
-            }
-
-            // Obliczenie offline progress (opcjonalne)
-            if (gameData.lastSaveTime) {
-                this.calculateOfflineProgress(gameData.lastSaveTime);
-            }
-
-            // Aktualizacja interfejsu
+            if (gameData.hasAutoClicker && !autoClickerInterval) this.restoreAutoClicker();
+            if (gameData.hasScrapyardInterval && scrapyardPurchased && !scrapyardInterval) this.restoreScrapyardInterval();
+            if (gameData.hasTireInterval && typeof treeUpgrades !== 'undefined' && treeUpgrades[1].level >= 1 && !tireInterval) this.restoreTireInterval();
+            if (gameData.selectedBarrelIndex !== undefined) updateBarrelImage(gameData.selectedBarrelIndex);
             this.updateAllUI();
-
-            // Przywróć cooldown timer jeśli był aktywny
-            if (savedCooldownTimeLeft > 0) {
-                this.restoreCooldownTimer(savedCooldownTimeLeft);
+            if (typeof initStormAfterLoad === 'function') initStormAfterLoad();
+            if (savedCooldownTimeLeft > 0) this.restoreCooldownTimer(savedCooldownTimeLeft);
+            if (originalVersion < 1.4 && typeof stormPurchased !== 'undefined' && stormPurchased && (!nextStormTime || nextStormTime < Date.now())) {
+                if (typeof scheduleNextStorm === 'function') { scheduleNextStorm(true); console.log('🛠️ Migration 1.4: Scheduled new storm time'); }
             }
-
-            console.log('✅ Game loaded!', new Date().toLocaleTimeString());
-            console.log('💰 Scraps:', scraps);
-            console.log('🔄 Rebirth Count:', rebirthCount);
-            
+            console.log('✅ Game loaded!', new Date().toLocaleTimeString(), `(save v${originalVersion} -> runtime v1.4)`);
             return true;
-
-        } catch (error) {
-            console.error('❌ Error loading game:', error);
-            console.log('🔄 Starting new game');
-            return false;
+        } catch (e) {
+            console.error('❌ Error loading game:', e); console.log('🔄 Starting new game'); return false;
         }
     }
 
@@ -226,19 +166,27 @@ class SaveSystem {
     // Przywracanie scrapyard interval
     restoreScrapyardInterval() {
         if (scrapyardPurchased) {
-            // Check if Tree Upgrade 1 (Better Scrapyard) is purchased
-            const scrapyardUpgradeActive = treeUpgrades && treeUpgrades[0] && treeUpgrades[0].level > 0;
-            const intervalTime = scrapyardUpgradeActive ? 1000 : 60000; // 1s if upgraded, 60s if not
-            
+            // Determine rate based on tree upgrades (Better/Best Scrapyard)
+            const better = treeUpgrades && treeUpgrades[0] && treeUpgrades[0].level > 0;
+            const best = treeUpgrades && treeUpgrades[3] && treeUpgrades[3].level > 0;
+            const perSecond = best ? 300 : (better ? 100 : 100/60); // default 100/min if none
+
             // Clear any existing interval first
-            if (scrapyardInterval) {
-                clearInterval(scrapyardInterval);
-            }
-            
+            if (scrapyardInterval) clearInterval(scrapyardInterval);
+
+            // Tick every second and add computed amount
             scrapyardInterval = setInterval(() => {
-                scraps += 100;
+                scraps += perSecond;
                 counter.textContent = `Scrap: ${scraps}`;
-            }, intervalTime);
+            }, 1000);
+        }
+    }
+
+    // Przywracanie tire interval
+    restoreTireInterval() {
+        if (typeof startTireInterval === 'function') {
+            startTireInterval();
+            console.log('🛞 Tire interval restored');
         }
     }
 
@@ -275,35 +223,8 @@ class SaveSystem {
 
     // Obliczanie offline progress (ile gracz zarobił będąc offline)
     calculateOfflineProgress(lastSaveTime) {
-        const now = Date.now();
-        const timeDifferenceMinutes = (now - lastSaveTime) / (1000 * 60);
-        
-        // Maksymalnie 8 godzin offline progress
-        const maxOfflineHours = 8;
-        const maxOfflineMinutes = maxOfflineHours * 60;
-        const actualOfflineMinutes = Math.min(timeDifferenceMinutes, maxOfflineMinutes);
-
-        if (actualOfflineMinutes > 1) { // Tylko jeśli był offline więcej niż minutę
-            let offlineEarnings = 0;
-
-            // Auto clicker earnings
-            if (upgradeLevels[1] > 0) {
-                offlineEarnings += actualOfflineMinutes * 60; // 1 scrap/s = 60 scrap/min
-            }
-
-            // Scrapyard earnings
-            if (scrapyardPurchased) {
-                const totalScrap = calculateTotalScrap();
-                offlineEarnings += actualOfflineMinutes * (totalScrap * 100 / 60);
-            }
-
-            if (offlineEarnings > 0) {
-                scraps += Math.floor(offlineEarnings);
-                
-                // Pokazanie powiadomienia o offline earnings
-                this.showOfflineEarningsNotification(actualOfflineMinutes, offlineEarnings);
-            }
-        }
+        // Offline earnings feature removed
+        return;
     }
 
     // Powiadomienie o zarobkach offline
@@ -453,12 +374,16 @@ class SaveSystem {
         // POTEM aktualizuj wszystkie UI funkcje z głównego skryptu
         if (typeof updateUpgradeInfo === 'function') updateUpgradeInfo();
         if (typeof updateScrapyardUI === 'function') updateScrapyardUI();
+    if (typeof updateScrapyardSectionsVisibility === 'function') updateScrapyardSectionsVisibility();
         if (typeof updateRebirthUI === 'function') updateRebirthUI();
         if (typeof updateGreenUpgradeUI === 'function') updateGreenUpgradeUI();
+        if (typeof updateGreenUpgradeBarrelAvailability === 'function') updateGreenUpgradeBarrelAvailability();
         if (typeof updateTreeUI === 'function') updateTreeUI();
         if (typeof updateMysteryBookUI === 'function') updateMysteryBookUI();
         if (typeof updateMasterTokenUI === 'function') updateMasterTokenUI();
         if (typeof updateBrickUI === 'function') updateBrickUI();
+        if (typeof updateTilesUI === 'function') updateTilesUI();
+    if (typeof updateBlueUpgradeUI === 'function') updateBlueUpgradeUI();
         if (typeof checkUpgradeUnlock === 'function') checkUpgradeUnlock();
         
         // Aktualizuj bonusy na wszystkich beczkach po wczytaniu gry
@@ -579,13 +504,21 @@ class SaveSystem {
                 treeUpgrades[i].level = 0;
             }
         }
-        
+
+        // Reset Tire system
+        tires = 0;
+        tiles = 0; // Reset tiles
+    if (typeof tilesTier !== 'undefined') tilesTier = 0; // Reset tiles tier
+    if (typeof tilesLevel !== 'undefined') tilesLevel = 0; // Reset tiles level
+        if (tireInterval) {
+            clearInterval(tireInterval);
+            tireInterval = null;
+        }
+
         // Reset selected tree upgrade
         if (typeof selectedTreeUpgrade !== 'undefined') {
             selectedTreeUpgrade = 0;
-        }
-        
-        // Resetuj obrazek do domyślnego
+        }        // Resetuj obrazek do domyślnego
         if (document.getElementById('scrap-image')) {
             document.getElementById('scrap-image').src = 'assets/scrap.png';
         }
@@ -794,6 +727,7 @@ function Fix() {
     console.log('🎯 Fix() completed! All game errors should be resolved.');
 }
 
+
 // Automatyczne uruchomienie systemu po załadowaniu DOM
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
@@ -811,7 +745,6 @@ window.loadGame = loadGame;
 window.resetSave = resetSave;
 window.exportSave = exportSave;
 window.Fix = Fix;
-
 console.log('💾 ScrapMasters Save System loaded!');
-console.log('🔧 Available console commands: saveGame(), loadGame(), resetSave(), exportSave(), Fix()');
-console.log('🎯 Use Fix() to repair game errors and refresh the interface!');
+console.log('🔧 Core console commands: saveGame(), loadGame(), resetSave(), exportSave(), Fix()');
+console.log('ℹ️ Developer/admin commands przeniesione do admincommands.js');

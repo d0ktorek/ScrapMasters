@@ -245,6 +245,19 @@ body {
     font-weight: bold;
 }
 
+#tiles-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 10px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 4px 12px;
+    font-size: 18px;
+    color: #9b59b6;
+    font-weight: bold;
+}
+
 #scrapyard-window {
     position: fixed;
     top: 50%;
@@ -267,30 +280,92 @@ body {
 
 .scrapyard-content {
     text-align: center;
+    /* Grid layout to keep ScrapYard | BrickYard | TilesYard perfectly aligned in one row */
+    display: grid;
+    grid-template-columns: 1fr 2px 1fr 2px 1fr; /* sections with thin separators */
+    gap: 30px;
+    align-items: stretch;
 }
 
-.scrapyard-left, #brickyard-section {
+.scrapyard-left, #brickyard-section, #tilesyard-section {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start; /* keep consistent top flow; bottoms handled by margin-top:auto on cost/status */
+    min-height: 400px;
+    height: 430px; /* ujednolicenie wysokości sekcji dla wyrównania */
+    padding: 20px 0;
+    flex: 1;
 }
 
-.scrapyard-description, .brickyard-description {
+/* Place items in explicit grid columns to avoid auto-placement glitches */
+.scrapyard-left { grid-column: 1; }
+#brickyard-separator { grid-column: 2; }
+#brickyard-section { grid-column: 3; }
+#tilesyard-separator { grid-column: 4; }
+#tilesyard-section { grid-column: 5; }
+
+.scrapyard-description, .brickyard-description, .tilesyard-description {
     margin: 15px 0;
-    color: #AAA;
+    color: #95a5a6; /* szary */
+    font-size: 14px; /* mniejszy tekst */
+    line-height: 1.35;
+    min-height: 44px; /* stała wysokość opisu dla wyrównania */
 }
 
-#scrapyard-image, #brickyard-image {
-    width: 120px;
-    height: 120px;
-    margin: 20px auto;
+/* drobniejsze doprecyzowanie dla tekstów w <small> */
+#brickyard-section small,
+#tilesyard-section small,
+.scrapyard-description small {
+    color: #9aa0a6;
+    font-style: italic;
+    font-size: 12px;
+}
+
+#scrapyard-image {
+    width: 122px;
+    height: 122px;
+    margin: 30px auto 20px auto;
     border-radius: 10px;
     transition: all 0.3s;
+    cursor: pointer;
+}
+
+#scrapyard-image:hover {
+    transform: scale(1.05);
+    filter: brightness(1.1);
+}
+
+#scrapyard-image:active {
+    transform: scale(0.98);
 }
 
 #brickyard-image {
+    width: 122px;
+    height: 122px;
+    margin: 30px auto 20px auto;
+    border-radius: 10px;
+    transition: all 0.3s;
     cursor: pointer;
+}
+
+/* TilesYard image */
+#tilesyard-image {
+    width: 122px;
+    height: 122px;
+    margin: 30px auto 20px auto;
+    border-radius: 10px;
+    transition: all 0.3s;
+    cursor: pointer;
+}
+
+#tilesyard-image:hover {
+    transform: scale(1.05);
+    filter: brightness(1.1);
+}
+
+#tilesyard-image:active {
+    transform: scale(0.98);
 }
 
 #brickyard-image:hover {
@@ -311,6 +386,16 @@ body {
     color: #FFD700;
     margin: 15px 0;
     font-weight: bold;
+}
+#scrapyard-cost, #brickyard-cost, #tilesyard-status {
+    margin-top: auto; /* pcha koszt/status i przycisk na dół sekcji */
+    min-height: 22px; /* wyrównanie wysokości linii kosztu/statusu */
+}
+
+/* ujednolicenie odstępów przycisków na dole */
+#buy-scrapyard,
+#buy-brick {
+    margin-top: 10px;
 }
 
 #brickyard-cost {
@@ -338,14 +423,110 @@ body {
     cursor: not-allowed;
 }
 
+#buy-brick {
+    background-color: #e67e22;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.3s;
+}
+
+#buy-brick:hover {
+    background-color: #d35400;
+    transform: scale(1.05);
+}
+
+#buy-brick:disabled {
+    background-color: #555;
+    cursor: not-allowed;
+}
+
 #brickyard-separator {
     background: linear-gradient(180deg, transparent, #34495e, transparent);
     opacity: 0.7;
+    width: 2px;
+    margin: 0 10px;
+    align-self: stretch; /* fill column height in grid */
+    height: auto;
+}
+
+/* Tilesyard separator */
+#tilesyard-separator {
+    background: linear-gradient(180deg, transparent, #6c5ce7, transparent);
+    opacity: 0.7;
+    width: 2px;
+    margin: 0 10px;
+    align-self: stretch;
+    height: auto;
 }
 
 #brickyard-section h3 {
     color: #e67e22;
     margin-bottom: 10px;
+}
+
+/* wyrównanie wysokości nagłówków w trzech kolumnach */
+.scrapyard-left h3,
+#brickyard-section h3,
+#tilesyard-section h3 {
+    min-height: 24px;
+}
+
+/* TilesYard heading and status */
+#tilesyard-section h3 {
+    color: #9b59b6;
+    margin-bottom: 10px;
+}
+
+#tilesyard-status {
+    margin-top: 10px;
+    color: #9b59b6;
+    font-weight: bold;
+}
+
+#tiles-upgrade-level {
+    margin-top: 8px;
+    color: #caa9ff;
+    font-size: 14px;
+}
+
+#tiles-level-label {
+    margin-top: 4px;
+    color: #caa9ff;
+    font-size: 14px;
+}
+
+#tiles-upgrade-btn {
+    background-color: #9b59b6;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.3s;
+    margin-top: 10px; /* matches other buttons */
+}
+
+#tiles-upgrade-btn:hover { background-color: #8e44ad; transform: scale(1.05); }
+#tiles-upgrade-btn:disabled { background-color: #555; cursor: not-allowed; transform: none; }
+
+/* Invisible placeholder to keep TilesYard bottom aligned with BrickYard button */
+/* removed ghost button: no longer needed with flex-start + margin-top:auto bottom alignment */
+
+/* Responsive fallback: stack on small screens */
+@media (max-width: 720px) {
+    .scrapyard-content {
+        grid-template-columns: 1fr; /* single column */
+        gap: 16px;
+    }
+    #brickyard-separator,
+    #tilesyard-separator {
+        display: none;
+    }
 }
 
 #brickyard-section small {
@@ -486,6 +667,21 @@ body {
     transform: scale(0.8);
 }
 
+/* Blue Upgrades button (bottom bar) */
+#blueupgrade-btn {
+    width: 60px;
+    height: 70px;
+    cursor: pointer;
+    transition: transform 0.2s;
+    filter: drop-shadow(0 0 5px rgba(0, 0, 0, 0.5));
+}
+#blueupgrade-btn:hover {
+    transform: scale(1.1);
+}
+#blueupgrade-btn:active {
+    transform: scale(0.95);
+}
+
 #greenupgrade-window {
     position: fixed;
     top: 50%;
@@ -576,6 +772,123 @@ body {
 
 .greenupgrade-button:hover {
     background-color: #219a52;
+    transform: scale(1.05);
+}
+
+/* Blue Upgrades window */
+#blueupgrade-window {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60%;
+    max-width: 520px;
+    background-color: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(5px);
+    border: 2px solid #2196F3; /* blue accent */
+    border-radius: 15px;
+    padding: 20px;
+    z-index: 120;
+    display: none;
+}
+
+#blueupgrade-window.active {
+    display: block;
+}
+
+.blueupgrade-content {
+    text-align: center;
+}
+
+.blueupgrade-description {
+    margin: 15px 0;
+    color: #AAA;
+    font-size: 1.1em;
+    margin-bottom: 24px;
+}
+
+#blueupgrade-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px 32px;
+    justify-items: center;
+    align-items: stretch;
+    position: relative;
+}
+
+/* Center the third tile spanning both columns */
+#blue-earnings-upgrade {
+    grid-column: 1 / span 2;
+    justify-self: center;
+}
+
+/* Ensure consistent internal spacing so height doesn't jump */
+.blueupgrade-item .blueupgrade-title { min-height: 20px; }
+.blueupgrade-item .blueupgrade-level { min-height: 18px; }
+.blueupgrade-item .blueupgrade-effect { min-height: 34px; display:flex; align-items:center; }
+.blueupgrade-item .blueupgrade-cost { min-height: 18px; }
+
+@media (max-width: 520px) {
+    #blueupgrade-grid { grid-template-columns: 1fr; }
+    #blue-earnings-upgrade { grid-column: 1; }
+}
+
+.blueupgrade-item {
+    background-color: transparent;
+    border: 1px solid #444;
+    border-radius: 12px;
+    padding: 16px 24px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s;
+    min-width: 120px;
+    min-height: 160px;
+}
+
+.blueupgrade-item img {
+    width: 46px;
+    height: 58px;
+    border-radius: 5px;
+    margin-bottom: 8px;
+}
+
+.blueupgrade-item:hover {
+    border-color: #2196F3;
+    transform: scale(1.03);
+}
+
+#close-blueupgrade {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+#close-blueupgrade:hover {
+    color: #2196F3;
+}
+
+.blueupgrade-button {
+    margin: 12px 0 8px 0;
+    padding: 8px 24px;
+    font-size: 14px;
+    font-weight: bold;
+    color: white;
+    background-color: #2196F3;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.blueupgrade-button:hover {
+    background-color: #1b7ccc;
     transform: scale(1.05);
 }
 
@@ -936,6 +1249,18 @@ body {
     transform: none;
 }
 
+/* Specjalny styl dla przycisku "Bought" */
+.tree-info-button:disabled[data-state="bought"] {
+    background: linear-gradient(135deg, #2196F3, #1976D2);
+    color: white;
+    opacity: 0.8;
+}
+
+.tree-info-button:disabled[data-state="bought"]:before {
+    content: "✓ ";
+    font-weight: bold;
+}
+
 .tree-info-tokens {
     font-size: 12px;
     color: #FFD700;
@@ -955,3 +1280,20 @@ body {
 #close-tree-info:hover {
     color: #4CAF50;
 }
+
+/* Storm system */
+#storm-cloud {
+    position:fixed;
+    top:-60px; /* push further above visual 0 to hide top edge */
+    left:0;
+    width:100%;
+    height:200px;
+    background:url('assets/storm.png') repeat-x top center;
+    background-size:contain; /* each repeat uses intrinsic height */
+    pointer-events:none;
+    opacity:0;
+    transition:opacity .5s ease;
+    z-index:4000;
+}
+#storm-cloud.active { opacity:1; }
+#storm-timer.storm-owned { display:block !important; }

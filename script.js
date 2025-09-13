@@ -14,6 +14,19 @@ const upgrade2Cost = 50;
 const upgrade3Costs = [30, 80, 300, 500, 600, 800, 900, 1000, 1300, 1600, 2000, 2500, 3000, 4000, 5000, 6000, 8000, 10000, 12000, 15000, 18000, 22000, 26000, 30000, 35000, 40000, 45000, 50000, 60000, 70000];
 const upgradeLevels = [0, 0, 0];
 
+// Tire system
+let tireInterval = null;
+let tires = 0;
+let tiles = 0; // New currency
+let tilesTier = 0; // current tier progress (0..10)
+let tilesLevel = 0; // total level; each full tier adds +1 level
+const tilesTierMax = 10;
+
+// Cost to upgrade a single Tier step grows with Level: base 1 + 2 per Level
+function getTilesTierCost() {
+    return 1 + (tilesLevel * 2);
+}
+
 // Elementy DOM
 const counter = document.getElementById('counter');
 const scrapImage = document.getElementById('scrap-image');
@@ -43,9 +56,20 @@ const masterTokenCount = document.getElementById('master-token-count');
 const brickCount = document.getElementById('brick-count');
 const brickContainer = document.getElementById('brick-container');
 const brickCounter = document.getElementById('brick-counter');
+const tilesCounter = document.getElementById('tiles-counter');
+const tilesContainer = document.getElementById('tiles-container');
 const brickyardSection = document.getElementById('brickyard-section');
 const brickyardSeparator = document.getElementById('brickyard-separator');
 const brickyardImage = document.getElementById('brickyard-image');
+const buyBrickBtn = document.getElementById('buy-brick');
+// TilesYard DOM
+const tilesyardSection = document.getElementById('tilesyard-section');
+const tilesyardSeparator = document.getElementById('tilesyard-separator');
+const tilesyardImage = document.getElementById('tilesyard-image');
+const tilesyardStatus = document.getElementById('tilesyard-status');
+const tilesUpgradeLevelLabel = document.getElementById('tiles-upgrade-level'); // will show Tier: x/10
+const tilesLevelLabel = document.getElementById('tiles-level-label'); // shows Level: x
+const tilesUpgradeBtn = document.getElementById('tiles-upgrade-btn');
 const treeContainer = document.getElementById('tree-container');
 const treeBtn = document.getElementById('tree-btn');
 const treeWindow = document.getElementById('tree-window');
@@ -60,6 +84,11 @@ const treeInfoBuyBtn = document.getElementById('tree-info-buy-btn');
 const treeInfoTokens = document.getElementById('tree-info-tokens');
 const treeInfoTitle = document.getElementById('tree-info-title');
 const treeInfoDescription = document.getElementById('tree-info-description');
+// Blue upgrade UI elements
+const blueUpgradeContainer = document.getElementById('blueupgrade-container');
+const blueUpgradeBtn = document.getElementById('blueupgrade-btn');
+const blueUpgradeWindow = document.getElementById('blueupgrade-window');
+const closeBlueUpgrade = document.getElementById('close-blueupgrade');
 
 const UPGRADE_UNLOCK = 10;
 
@@ -79,38 +108,58 @@ function checkUpgradeUnlock() {
 
 function updateRebirthUI() {
     starBtn.style.display = (scrapyardPurchased || rebirthCount > 0) ? "block" : "none";
+    if (rebirthCountDisplay) {
+        rebirthCountDisplay.textContent = `Rebirth: ${rebirthCount}`;
+    }
+    // Ensure Blue Upgrades visibility reflects purchase
+    if (blueUpgradeContainer) {
+        const blueUnlocked = treeUpgrades && treeUpgrades[4] && treeUpgrades[4].level > 0;
+        blueUpgradeContainer.classList.toggle('hidden', !blueUnlocked);
+    }
 }
 
 function updateGreenUpgradeUI() {
-    if (rebirthCount > 0) {
-        greenUpgradeBtn.style.display = "block";
-    } else {
-        greenUpgradeBtn.style.display = "none";
-    }
+    if (!greenUpgradeBtn) return;
+    greenUpgradeBtn.style.display = (rebirthCount > 0) ? "block" : "none";
 }
 
-function updateTreeUI() {
+function updateGreenUpgradeBarrelAvailability() {
+    document.querySelectorAll('.greenupgrade-item').forEach((item, index) => {
+        const button = item.querySelector('.greenupgrade-button');
+        const requiredRebirth = index;
+        const isUnlocked = rebirthCount >= requiredRebirth;
+        
+        if (!isUnlocked) {
+            button.disabled = true;
+            button.textContent = `${requiredRebirth} Rebirth`;
+            item.style.opacity = '0.5';
+        } else {
+            button.disabled = false;
+            button.textContent = 'Equip';
+            item.style.opacity = '1';
+        }
+    });
+}
+
+function updateScrapyardSectionsVisibility() {
     if (rebirthCount >= 5) {
         treeContainer.classList.remove('hidden');
-        // Show brickyard section and separator in scrapyard window
-        if (brickyardSection) {
-            brickyardSection.classList.remove('hidden');
-        }
-        if (brickyardSeparator) {
-            brickyardSeparator.classList.remove('hidden');
-        }
+        if (brickyardSection) brickyardSection.classList.remove('hidden');
+        if (brickyardSeparator) brickyardSeparator.classList.remove('hidden');
     } else {
         treeContainer.classList.add('hidden');
-        // Hide brickyard section and separator in scrapyard window
-        if (brickyardSection) {
-            brickyardSection.classList.add('hidden');
-        }
-        if (brickyardSeparator) {
-            brickyardSeparator.classList.add('hidden');
-        }
+        if (brickyardSection) brickyardSection.classList.add('hidden');
+        if (brickyardSeparator) brickyardSeparator.classList.add('hidden');
     }
-    
-    // Brick counter jest zarządzany przez updateBrickUI()
+    // TilesYard visible in Book ONLY after purchase of tree upgrade index 2
+    const tilesYardUnlocked = treeUpgrades && treeUpgrades[2] && treeUpgrades[2].level > 0;
+    if (tilesyardSection) tilesyardSection.classList.toggle('hidden', !tilesYardUnlocked);
+    if (tilesyardSeparator) tilesyardSeparator.classList.toggle('hidden', !tilesYardUnlocked);
+    // Blue Upgrades visibility still depends on tree upgrade 5
+    if (blueUpgradeContainer) {
+        const blueUnlocked = treeUpgrades && treeUpgrades[4] && treeUpgrades[4].level > 0;
+        blueUpgradeContainer.classList.toggle('hidden', !blueUnlocked);
+    }
 }
 
 function updateUpgradeInfo() {
@@ -164,6 +213,8 @@ function openScrapyardWindow() {
     scrapyardWindow.classList.remove('hidden'); // Dodaj to!
     scrapyardWindow.classList.add('active');
     updateScrapyardUI();
+    // Ensure TilesYard/BrickYard visibility reflects current upgrades
+    if (typeof updateScrapyardSectionsVisibility === 'function') updateScrapyardSectionsVisibility();
 }
 
 function openRebirthWindow() {
@@ -177,9 +228,11 @@ function buyScrapyard() {
         scrapyardPurchased = true;
         counter.textContent = `Scrap: ${scraps}`;
         
-        // Check if Tree Upgrade 1 (Better Scrapyard) is purchased
-        const scrapyardUpgradeActive = treeUpgrades && treeUpgrades[0] && treeUpgrades[0].level > 0;
-        const intervalTime = scrapyardUpgradeActive ? 1000 : 60000; // 1s if upgraded, 60s if not
+        // Determine scrapyard rate based on upgrades
+        const better = treeUpgrades && treeUpgrades[0] && treeUpgrades[0].level > 0;
+        const best = treeUpgrades && treeUpgrades[3] && treeUpgrades[3].level > 0;
+        const perSecond = best ? 300 : (better ? 100 : 100/60); // if none, 100 per minute
+        const intervalTime = 1000; // tick every second; compute add based on perSecond
         
         // Clear any existing interval first
         if (scrapyardInterval) {
@@ -187,7 +240,7 @@ function buyScrapyard() {
         }
         
         scrapyardInterval = setInterval(() => {
-            scraps += 100;
+            scraps += perSecond;
             counter.textContent = `Scrap: ${scraps}`;
         }, intervalTime);
         
@@ -234,7 +287,10 @@ function performRebirth() {
         if (scrapyardInterval) clearInterval(scrapyardInterval);
 
         rebirthCount++;
-        
+        if (rebirthCountDisplay) {
+            rebirthCountDisplay.textContent = `Rebirth: ${rebirthCount}`;
+        }
+
         // Dodaj 1 Brick za każdy rebirth (tylko od 5 rebirth)
         if (rebirthCount >= 5) {
             bricks += 1;
@@ -244,7 +300,8 @@ function performRebirth() {
         updateUpgradeInfo();
         updateScrapyardUI();
         updateGreenUpgradeUI();
-        updateTreeUI(); // Dodano aktualizację UI dla Tree
+        updateGreenUpgradeBarrelAvailability(); // Dodano aktualizację dostępności barrel
+    updateScrapyardSectionsVisibility(); // Odśwież widoczność sekcji w Book
         updateMysteryBookUI(); // Dodano aktualizację UI dla Mystery Book
         updateBrickUI(); // Dodano aktualizację UI dla Brick
         rebirthWindow.classList.remove('active');
@@ -343,20 +400,81 @@ function updateBarrelImage(index) {
 }
 
 let scrapBonusPercent = 0;
+// Blue Upgrades system (permanent Tires-based)
+// Explicit cost list provided by user for Better Upgrades
+const blueBetterCosts = [
+    100, 300, 800, 1000, 1400, 6000, 10000, 15000, 30000,
+    40000, 100000, 300000, 800000, 1000000, 3000000, 5000000
+]; // 16 levels
+// New Blue Upgrade: The Earnings (adds flat +10 scrap per click per level)
+const blueEarningsCosts = [
+    3000,        // L1
+    15000,       // L2
+    90000,       // L3
+    450000,      // L4
+    2500000,     // L5
+    12000000,    // L6
+    60000000,    // L7
+    350000000,   // L8
+    1500000000,  // L9
+    6000000000   // L10
+];
+const blueUpgrades = {
+    better: { level: 0, max: blueBetterCosts.length, multiplierPerLevel: 0.25 },
+    // The Tires upgrade (now multi-level)
+    tires: { level: 0, max: 30, perLevelBonus: 100 },
+    earnings: { level: 0, max: 10, scrapPerLevel: 1000 }
+};
+// Costs for The Tires upgrade levels 1..30 (progressively large)
+const blueTiresCosts = [
+    35000, 70000, 140000, 245000, 350000, 525000, 700000, 1050000, 1400000, 2100000,
+    3150000, 4200000, 5600000, 7000000, 9100000, 11900000, 15400000, 19600000, 24500000, 30100000,
+    36400000, 43400000, 52500000, 63000000, 73500000, 87500000, 105000000, 126000000, 150500000, 178500000
+];
+// Safety clamp in case save had higher level
+if (blueUpgrades.better.level > blueUpgrades.better.max) {
+    blueUpgrades.better.level = blueUpgrades.better.max;
+}
+function getBlueUpgradeCost(key) {
+    if (key === 'better') {
+        const lvl = blueUpgrades.better.level;
+        return blueBetterCosts[lvl] !== undefined ? blueBetterCosts[lvl] : Infinity;
+    } else if (key === 'tires') {
+        const lvl = blueUpgrades.tires.level;
+        return blueTiresCosts[lvl] !== undefined ? blueTiresCosts[lvl] : Infinity;
+    } else if (key === 'earnings') {
+        const lvl = blueUpgrades.earnings.level;
+        return blueEarningsCosts[lvl] !== undefined ? blueEarningsCosts[lvl] : Infinity;
+    }
+    return Infinity;
+}
+function getClickMultiplier() {
+    const better = 1 + blueUpgrades.better.level * blueUpgrades.better.multiplierPerLevel; // +0.25x per level
+    return better;
+}
 
 function updateScrapBonus(index) {
-    // Każda beczka daje stały bonus +1 Scrap/Click (zamiast procentów)
+    // Każda beczka daje stały bonus, scrap = 0, barrel1 = 1, barrel2 = 2, itd.
     scrapBonusPercent = index; // 0, 1, 2, 3, 4, 5
 }
 
 function calculateTotalScrap() {
-    // Bazowy bonus z wybranej beczki (scrap=1, barrel1=2, itd.) + upgrady Mystery Book
-    const baseBarrelBonus = scrapBonusPercent + 1; // +1 bo scrapBonusPercent to indeks (0,1,2,3,4,5)
-    const totalScrap = scrapPerClick + baseBarrelBonus + (barrelLevels.reduce((sum, level) => sum + level, 0));
-    return totalScrap;
+    // Bazowy bonus z wybranej beczki (scrap=0, barrel1=1, itd.) + upgrady Mystery Book
+    const baseBarrelBonus = scrapBonusPercent; // Teraz scrapBonusPercent to indeks (0,1,2,3,4,5) = bonus (0,1,2,3,4,5)
+    const earningsFlat = (blueUpgrades.earnings ? blueUpgrades.earnings.level * blueUpgrades.earnings.scrapPerLevel : 0);
+    const additive = scrapPerClick + baseBarrelBonus + (barrelLevels.reduce((sum, level) => sum + level, 0)) + earningsFlat;
+    // Apply blue upgrade multiplier
+    return additive * getClickMultiplier();
 }
 
 function handleBarrelButtonClick(index) {
+    // Sprawdź wymagany rebirth dla tego barrel
+    const requiredRebirth = index;
+    if (rebirthCount < requiredRebirth) {
+        alert(`You need at least ${requiredRebirth} rebirths to use this barrel!`);
+        return;
+    }
+    
     updateBarrelImage(index);
     updateScrapBonus(index);
 }
@@ -378,28 +496,194 @@ const treeUpgrades = [
         rebirth: 6, price: 1000, scrapPrice: 1000, brickPrice: 5, level: 0, maxLevel: 1, requiresScrapyard: true
     },
     {
-        img: 'scrapyard.png', name: 'Tree Upgrade 2', desc: "",
-        rebirth: 8, price: 50, level: 0, maxLevel: 1
+        img: 'tires.png', name: 'Tires', desc: "Unlocks Tires currency! Every 60 seconds, 1 tire falls down giving +1 Tires when hovered!",
+        rebirth: 8, price: 35, scrapPrice: 3000, brickPrice: 10, level: 0, maxLevel: 1, requiresPrevious: true
     },
     {
-        img: 'scrapyard.png', name: 'Tree Upgrade 3', desc: "",
-        rebirth: 10, price: 100, level: 0, maxLevel: 1
+        img: 'tilesyard.png', name: 'TiresYard', desc: "Unlocks TiresYard in the Book as the 3rd option.",
+        rebirth: 10, price: 120, scrapPrice: 15000, tilesPrice: 25, level: 0, maxLevel: 1, requiresTwoUpgrades: true
     },
     {
-        img: 'scrapyard.png', name: 'Tree Upgrade 4', desc: "",
-        rebirth: 12, price: 200, level: 0, maxLevel: 1
+        img: 'goldscrapyard.png', name: 'Best Scrapyard', desc: "Upgrade your Scrapyard from 100 Scrap/s to 300 Scrap/s!",
+        rebirth: 12, scrapPrice: 80000, brickPrice: 30, tilesPrice: 500, level: 0, maxLevel: 1
     },
     {
-        img: 'scrapyard.png', name: 'Tree Upgrade 5', desc: "",
-        rebirth: 14, price: 400, level: 0, maxLevel: 1
+    img: 'blueupgrade.png', name: 'Tires Upgrades', desc: "Unlocks Blue Upgrades menu where you spend Tires on permanent upgrades (persist through rebirth).",
+    rebirth: 14, scrapPrice: 2000000, brickPrice: 120, tilesPrice: 800, level: 0, maxLevel: 1
     },
     {
-        img: 'scrapyard.png', name: 'Tree Upgrade 6', desc: "",
-        rebirth: 16, price: 800, level: 0, maxLevel: 1
+        img: 'Cloud.png', name: 'Storm', desc: 'Every 4 minutes a giant cloud drops 30 Tires across the screen.',
+        rebirth: 16, price: 100, scrapPrice: 300000, tilesPrice: 500, level: 0, maxLevel: 1
     },
 ];
 
 var selectedTreeUpgrade = 0;
+
+// Storm system variables
+const STORM_INTERVAL_MS = 4 * 60 * 1000;
+const STORM_DROP_COUNT = 30;
+const STORM_DROP_SPACING_MS = 200; // ms between each tire drop
+let nextStormTime = null;
+let stormActive = false;
+let stormPurchased = false;
+
+function showStormTimer() {
+    const el = document.getElementById('storm-timer');
+    if (el) {
+        el.classList.add('storm-owned');
+        el.style.display = 'block';
+    }
+}
+
+function scheduleNextStorm(fromNow) {
+    const now = Date.now();
+    if (fromNow || !nextStormTime || nextStormTime <= now) {
+        nextStormTime = now + STORM_INTERVAL_MS;
+    }
+}
+
+function spawnStormCloud() {
+    let cloud = document.getElementById('storm-cloud');
+    if (!cloud) {
+        cloud = document.createElement('div');
+        cloud.id = 'storm-cloud';
+        document.body.appendChild(cloud);
+    }
+    cloud.classList.add('active');
+    stormActive = true;
+    for (let i = 0; i < STORM_DROP_COUNT; i++) {
+        setTimeout(() => {
+            if (typeof createFallingTire === 'function') createFallingTire();
+            if (i === STORM_DROP_COUNT - 1) {
+                setTimeout(() => {
+                    cloud.classList.remove('active');
+                    stormActive = false;
+                    scheduleNextStorm(true);
+                }, 1500);
+            }
+        }, i * STORM_DROP_SPACING_MS);
+    }
+}
+
+function updateStormTimer() {
+    if (!stormPurchased) return;
+    const el = document.getElementById('storm-timer');
+    if (!el) return;
+    const now = Date.now();
+
+    // Catch-up: if time passed, trigger storm immediately (one cycle at a time)
+    if (!stormActive && nextStormTime && now >= nextStormTime) {
+        spawnStormCloud();
+        return; // cloud schedule will set nextStormTime
+    }
+
+    const remaining = nextStormTime ? (nextStormTime - now) : 0;
+    if (remaining <= 0) {
+        el.textContent = '00:00';
+    } else {
+        const totalSec = Math.floor(remaining / 1000);
+        const m = Math.floor(totalSec / 60);
+        const s = totalSec % 60;
+        el.textContent = (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+    }
+}
+
+setInterval(updateStormTimer, 1000);
+
+function initStormAfterLoad() {
+    const stormIndex = treeUpgrades.findIndex(t => t.name === 'Storm');
+    if (stormIndex !== -1 && treeUpgrades[stormIndex].level > 0) {
+        stormPurchased = true;
+        showStormTimer();
+        if (!nextStormTime) scheduleNextStorm(true);
+    }
+}
+
+// Tire system functions
+function startTireInterval() {
+    if (tireInterval) clearInterval(tireInterval);
+    tireInterval = setInterval(() => {
+        createFallingTire();
+    console.log(`🛞 Tire spawned! Hover it to get +1 Tires!`);
+    }, 60000); // Every 60 seconds
+}
+
+function stopTireInterval() {
+    if (tireInterval) {
+        clearInterval(tireInterval);
+        tireInterval = null;
+    }
+}
+
+function createFallingTire() {
+    const tire = document.createElement('img');
+    tire.src = 'assets/tires.png';
+    tire.style.cssText = `
+        position: fixed;
+        width: 60px;
+        height: 60px;
+        z-index: 999;
+        pointer-events: auto;
+        cursor: pointer;
+        top: -70px;
+        left: ${Math.random() * (window.innerWidth - 60)}px;
+        animation: fallDown 3s linear;
+        transition: transform 0.1s;
+    `;
+    
+    // Add hover handler for +Tiles (zbierasz po nakierowaniu kursora)
+    tire.addEventListener('mouseenter', () => {
+        // Tiles gained per tire is Level + 1 (so Level 0 -> 1 Tiles, Level 4 -> 5 Tiles)
+        let tilesPerPickup = (typeof tilesLevel !== 'undefined') ? (tilesLevel + 1) : 1;
+        if (blueUpgrades.tires && blueUpgrades.tires.level >= 1) {
+            tilesPerPickup *= (blueUpgrades.tires.perLevelBonus * blueUpgrades.tires.level); // 100 * level
+        }
+        tiles += tilesPerPickup;
+        tires += 1; // Keep track of total tires collected
+        updateTilesUI();
+    console.log(`🛞 Tire hovered! +${tilesPerPickup} Tires! Total tires currency: ${tiles}, Tires collected: ${tires}`);
+        
+        // Visual feedback
+        tire.style.transform = 'scale(1.2)';
+        setTimeout(() => {
+            if (tire.parentNode) {
+                tire.parentNode.removeChild(tire);
+            }
+        }, 100);
+        
+        // Save progress
+        if (typeof saveSystem !== 'undefined') {
+            saveSystem.saveGame();
+        }
+    });
+    
+    // Add additional hover effect for visual feedback
+    tire.addEventListener('mouseleave', () => {
+        tire.style.transform = 'scale(1.0)';
+    });
+    
+    // Add CSS animation if not exists
+    if (!document.getElementById('tire-animation')) {
+        const style = document.createElement('style');
+        style.id = 'tire-animation';
+        style.textContent = `
+            @keyframes fallDown {
+                from { top: -70px; transform: rotate(0deg); }
+                to { top: ${window.innerHeight + 70}px; transform: rotate(720deg); }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
+    document.body.appendChild(tire);
+    
+    // Remove tire after animation
+    setTimeout(() => {
+        if (tire.parentNode) {
+            tire.parentNode.removeChild(tire);
+        }
+    }, 3000);
+}
 
 function updateBrickUI() {
     if (brickCounter) {
@@ -409,6 +693,47 @@ function updateBrickUI() {
             brickCounter.classList.remove('hidden');
         } else {
             brickCounter.classList.add('hidden');
+        }
+    }
+}
+
+function updateTilesUI() {
+    // Tiles counter visibility still depends on Tires tree upgrade (index 1)
+    if (tilesCounter) {
+        tilesCounter.textContent = `Tires: ${tiles}`;
+        const tiresUnlocked = treeUpgrades && treeUpgrades[1] && treeUpgrades[1].level > 0;
+        tilesCounter.classList.toggle('hidden', !tiresUnlocked);
+        if (tilesContainer) tilesContainer.classList.toggle('hidden', !tiresUnlocked);
+        if (tiresUnlocked) {
+            clearInterval(tireInterval);
+            tireInterval = setInterval(createFallingTire, 60000);
+        } else {
+            clearInterval(tireInterval);
+        }
+    }
+
+    // TilesYard purchase gating by tree upgrade #3 (index 2)
+    const tilesYardUnlocked = treeUpgrades && treeUpgrades[2] && treeUpgrades[2].level > 0;
+    if (tilesyardStatus && !tilesYardUnlocked) {
+        tilesyardStatus.textContent = 'Locked: Buy TiresYard (Tree Upgrade 3)';
+    } else if (tilesyardStatus && tilesYardUnlocked) {
+        const cost = getTilesTierCost();
+        tilesyardStatus.textContent = `Cost: ${cost} Tires`;
+    }
+
+    if (tilesUpgradeLevelLabel) tilesUpgradeLevelLabel.textContent = `Tier: ${tilesTier}/${tilesTierMax}`;
+    if (tilesLevelLabel) tilesLevelLabel.textContent = `Level: ${tilesLevel}`;
+    if (tilesUpgradeBtn) {
+        if (!tilesYardUnlocked) {
+            tilesUpgradeBtn.disabled = true;
+            tilesUpgradeBtn.textContent = 'Locked';
+            tilesUpgradeBtn.title = 'Unlock via Tree Upgrade 3';
+        } else {
+            const cost = getTilesTierCost();
+            const canUpgrade = (tilesTier < tilesTierMax) && (tiles >= cost);
+            tilesUpgradeBtn.disabled = !canUpgrade;
+            tilesUpgradeBtn.textContent = (tilesTier < tilesTierMax) ? 'Upgrade' : 'Tier Maxed';
+            tilesUpgradeBtn.title = `Cost: ${cost} Tires`;
         }
     }
 }
@@ -425,21 +750,40 @@ function updateMysteryBookUI() {
         const costElement = item.querySelector('.mysterybook-cost');
         const button = item.querySelector('.mysterybook-button');
         
+        // Sprawdź wymagany rebirth dla tego barrel (scrap=0, barrel1=1, barrel2=2, itd.)
+        const requiredRebirth = index;
+        const isUnlocked = rebirthCount >= requiredRebirth;
+        
         levelElement.textContent = `Level: ${barrelLevels[index]}/${barrelMaxLevel}`;
         costElement.textContent = `Cost: ${barrelCosts[index]} Master Token`;
         
-        button.disabled = barrelLevels[index] >= barrelMaxLevel || masterTokens < barrelCosts[index];
+        if (!isUnlocked) {
+            button.disabled = true;
+            button.textContent = `Requires ${requiredRebirth} Rebirth`;
+            item.style.opacity = '0.5';
+        } else {
+            button.textContent = 'Upgrade';
+            item.style.opacity = '1';
+            button.disabled = barrelLevels[index] >= barrelMaxLevel || masterTokens < barrelCosts[index];
+        }
     });
 }
 
 function updateGreenUpgradeBonus(index) {
     const greenUpgradeText = document.querySelectorAll('.greenupgrade-text')[index];
-    const baseBonus = index + 1; // Bazowy bonus: scrap=1, barrel1=2, barrel2=3, itd.
+    const baseBonus = index; // Bazowy bonus: scrap=0, barrel1=1, barrel2=2, itd.
     const totalBonus = baseBonus + barrelLevels[index]; // Każdy poziom dodaje +1 Scrap/Click
     greenUpgradeText.textContent = `+${totalBonus} Scrap/Click`;
 }
 
 function handleMysteryBookUpgrade(index) {
+    // Sprawdź wymagany rebirth dla tego barrel
+    const requiredRebirth = index;
+    if (rebirthCount < requiredRebirth) {
+        alert(`You need at least ${requiredRebirth} rebirths to upgrade this barrel!`);
+        return;
+    }
+    
     if (barrelLevels[index] < barrelMaxLevel) {
         const cost = barrelCosts[index];
         if (masterTokens >= cost) {
@@ -457,6 +801,23 @@ function handleMysteryBookUpgrade(index) {
     }
 }
 
+// TilesYard upgrade handler: spend 1 Tiles to increase Tier (0..10). When Tier reaches 10, reset Tier to 0 and increase Level by 1.
+function handleTilesUpgrade() {
+    // Disallow if Tree Upgrade 3 (index 2) not purchased
+    if (!treeUpgrades || !treeUpgrades[2] || treeUpgrades[2].level === 0) return;
+    if (tilesTier >= tilesTierMax) return;
+    const cost = getTilesTierCost();
+    if (tiles < cost) return;
+    tiles -= cost;
+    tilesTier += 1;
+    if (tilesTier >= tilesTierMax) {
+        tilesTier = 0;
+        tilesLevel += 1;
+    }
+    updateTilesUI();
+    if (typeof saveSystem !== 'undefined') saveSystem.saveGame();
+}
+
 // Tree functions
 function updateTreeUI() {
     // Pierwsza pozycja tree
@@ -465,6 +826,8 @@ function updateTreeUI() {
     let upgName = "";
 
     for (let upg in treeUpgrades) {
+        // Always render TilesYard now (index 2); gating done in info window/purchase logic
+        
         // go through tree upgrades and add them to the render
         // if you don't have enough rebirts they show specific star images based on rebirth requirement
         if (rebirthCount < treeUpgrades[upg].rebirth) {
@@ -514,13 +877,29 @@ function updateTreeInfoWindow(index) {
         if (treeUpgrades[requiredUpgrades[p]].level < 1) allPaths = false;
     }
 
-    // Check special requirements for Better Scrapyard
+    // Check special requirements for upgrades
     let canAfford = true;
     let requirementText = `Required: ${upg.rebirth} Rebirth`;
     
     if (index === 0) { // Better Scrapyard
         requirementText += `, Scrapyard, ${upg.brickPrice} Brick, ${upg.scrapPrice} Scrap`;
         canAfford = scrapyardPurchased && bricks >= upg.brickPrice && scraps >= upg.scrapPrice;
+    } else if (index === 1) { // Tires
+        requirementText += `, Better Scrapyard, ${upg.brickPrice} Brick, ${upg.scrapPrice} Scrap, ${upg.price} Master Tokens`;
+        canAfford = treeUpgrades[0].level >= 1 && bricks >= upg.brickPrice && scraps >= upg.scrapPrice && masterTokens >= upg.price;
+    } else if (index === 2 && upg.requiresTwoUpgrades) { // TilesYard upgrade: now requires Tires (index 1)
+        const tiresOwned = treeUpgrades[1].level >= 1;
+        requirementText += `, Tires Upgrade, ${upg.scrapPrice} Scrap, ${upg.tilesPrice} Tires, ${upg.price} Master Tokens`;
+        canAfford = tiresOwned && scraps >= upg.scrapPrice && tiles >= upg.tilesPrice && masterTokens >= upg.price;
+    } else if (index === 3) { // Best Scrapyard - multi-currency cost
+        requirementText += `, ${upg.brickPrice} Brick, ${upg.scrapPrice} Scrap, ${upg.tilesPrice} Tires`;
+        canAfford = bricks >= upg.brickPrice && scraps >= upg.scrapPrice && tiles >= upg.tilesPrice;
+    } else if (index === 4) { // Tires Upgrades - multi-currency cost
+        requirementText += `, ${upg.brickPrice} Brick, ${upg.scrapPrice} Scrap, ${upg.tilesPrice} Tires`;
+        canAfford = bricks >= upg.brickPrice && scraps >= upg.scrapPrice && tiles >= upg.tilesPrice;
+    } else if (upg.name === 'Storm') {
+        requirementText += `, ${upg.scrapPrice} Scrap, ${upg.tilesPrice} Tires, ${upg.price} Master Tokens`;
+        canAfford = scraps >= upg.scrapPrice && tiles >= upg.tilesPrice && masterTokens >= upg.price;
     } else {
         requirementText += `, ${upg.price} Master Tokens`;
         canAfford = masterTokens >= upg.price;
@@ -547,18 +926,47 @@ function updateTreeInfoWindow(index) {
         treeInfoDescription.textContent = upg.desc;
     }
     
-    // Pokaż przycisk upgrade tylko jeśli rebirth >= 6 i nie kupione
+    // Pokaż przycisk upgrade - zawsze widoczny, ale zmienia stan
     if (treeInfoBuyBtn) {
-        if (index === 0) {
-            treeInfoBuyBtn.textContent = `Upgrade for ${upg.brickPrice} Brick + ${upg.scrapPrice} Scrap`;
-        } else {
-            treeInfoBuyBtn.textContent = `Upgrade for ${upg.price} Master Tokens`;
-        }
-        
-        if (rebirthCount >= upg.rebirth && upg.level < upg.maxLevel && allPaths) {
+        if (upg.level >= upg.maxLevel) {
+            // Już kupiony
+            treeInfoBuyBtn.textContent = "Bought";
+            treeInfoBuyBtn.disabled = true;
+            treeInfoBuyBtn.setAttribute('data-state', 'bought');
             treeInfoBuyBtn.classList.remove('hidden');
-            treeInfoBuyBtn.disabled = !canAfford;
+        } else if (rebirthCount >= upg.rebirth && allPaths) {
+            // Dostępny do kupna
+            treeInfoBuyBtn.removeAttribute('data-state');
+            if (index === 0) {
+                treeInfoBuyBtn.textContent = `Buy for ${upg.brickPrice} Brick + ${upg.scrapPrice} Scrap`;
+            } else if (index === 1) {
+                treeInfoBuyBtn.textContent = `Buy for ${upg.brickPrice} Brick + ${upg.scrapPrice} Scrap + ${upg.price} Master Tokens`;
+            } else if (index === 2 && upg.requiresTwoUpgrades) {
+                treeInfoBuyBtn.textContent = `Buy for ${upg.scrapPrice} Scrap + ${upg.tilesPrice} Tires + ${upg.price} Master Tokens`;
+            } else if (index === 3) {
+                treeInfoBuyBtn.textContent = `Buy for ${upg.brickPrice} Brick + ${upg.scrapPrice} Scrap + ${upg.tilesPrice} Tires`;
+            } else if (index === 4) {
+                treeInfoBuyBtn.textContent = `Buy for ${upg.brickPrice} Brick + ${upg.scrapPrice} Scrap + ${upg.tilesPrice} Tires`;
+                // Make clickable; handleTreeUpgrade will validate and show precise alerts
+                const missingBrick = Math.max(0, upg.brickPrice - (bricks || 0));
+                const missingScrap = Math.max(0, upg.scrapPrice - (scraps || 0));
+                const missingTires = Math.max(0, upg.tilesPrice - (tiles || 0));
+                const missingText = (missingBrick || missingScrap || missingTires)
+                    ? `Missing: ${missingBrick} Brick, ${missingScrap} Scrap, ${missingTires} Tires`
+                    : '';
+                treeInfoBuyBtn.disabled = false;
+                if (missingText) treeInfoBuyBtn.title = missingText; else treeInfoBuyBtn.removeAttribute('title');
+            } else if (upg.name === 'Storm') {
+                treeInfoBuyBtn.textContent = `Buy for ${upg.scrapPrice} Scrap + ${upg.tilesPrice} Tires + ${upg.price} Master Tokens`;
+            } else {
+                treeInfoBuyBtn.textContent = `Buy for ${upg.price} Master Tokens`;
+            }
+            if (index !== 4) {
+                treeInfoBuyBtn.disabled = !canAfford;
+            }
+            treeInfoBuyBtn.classList.remove('hidden');
         } else {
+            // Zablokowany
             treeInfoBuyBtn.classList.add('hidden');
         }
     }
@@ -574,13 +982,16 @@ function handleTreeUpgrade(index) {
             scraps -= upg.scrapPrice;
             upg.level++;
 
-            // Better Scrapyard effect - change from 60s to 1s interval
-            if (scrapyardPurchased && scrapyardInterval) {
-                clearInterval(scrapyardInterval);
+            // Better Scrapyard effect - apply best available rate (respect Best Scrapyard if owned)
+            if (scrapyardPurchased) {
+                const better = true; // we just purchased Better
+                const best = treeUpgrades && treeUpgrades[3] && treeUpgrades[3].level > 0;
+                const perSecond = best ? 300 : (better ? 100 : 100/60);
+                if (scrapyardInterval) clearInterval(scrapyardInterval);
                 scrapyardInterval = setInterval(() => {
-                    scraps += 100;
+                    scraps += perSecond;
                     counter.textContent = `Scrap: ${scraps}`;
-                }, 1000); // Change to 1 second interval
+                }, 1000);
             }
 
             // UI updates
@@ -598,6 +1009,175 @@ function handleTreeUpgrade(index) {
             alert('You don\'t have enough Bricks!');
         } else if (scraps < upg.scrapPrice) {
             alert('You don\'t have enough Scrap!');
+        } else {
+            alert('This upgrade is already purchased!');
+        }
+    } else if (index === 1) { // Tires upgrade - special requirements
+        if (rebirthCount >= upg.rebirth && 
+            treeUpgrades[0].level >= 1 && // Requires previous upgrade (Better Scrapyard)
+            bricks >= upg.brickPrice && 
+            scraps >= upg.scrapPrice && 
+            masterTokens >= upg.price && 
+            upg.level < upg.maxLevel) {
+            
+            // Handle upgrade - deduct all currencies
+            bricks -= upg.brickPrice;
+            scraps -= upg.scrapPrice;
+            masterTokens -= upg.price;
+            upg.level++;
+
+            // Start tire system
+            startTireInterval();
+
+            // UI updates
+            treeInfoBuyBtn.classList.add('hidden');
+            updateBrickUI();
+            updateTilesUI(); // Refresh Tires counter visibility
+            updateMasterTokenUI();
+            if (counter) counter.textContent = `Scrap: ${scraps}`;
+            updateTreeUI();
+
+            console.log('🛞 Tires upgrade activated! Tires will fall every 60 seconds.');
+        } else if (rebirthCount < upg.rebirth) {
+            alert('You need at least ' + upg.rebirth + ' rebirths to unlock this upgrade!');
+        } else if (treeUpgrades[0].level < 1) {
+            alert('You need to purchase Better Scrapyard first!');
+        } else if (bricks < upg.brickPrice) {
+            alert('You don\'t have enough Bricks! Need: ' + upg.brickPrice);
+        } else if (scraps < upg.scrapPrice) {
+            alert('You don\'t have enough Scrap! Need: ' + upg.scrapPrice);
+        } else if (masterTokens < upg.price) {
+            alert('You don\'t have enough Master Tokens! Need: ' + upg.price);
+        } else {
+            alert('This upgrade is already purchased!');
+        }
+    } else if (index === 2 && upg.requiresTwoUpgrades) { // TilesYard upgrade now requires Tires upgrade only
+        const tiresOwned = treeUpgrades[1].level >= 1;
+        if (rebirthCount >= upg.rebirth && 
+            tiresOwned && 
+            scraps >= upg.scrapPrice &&
+            tiles >= upg.tilesPrice &&
+            masterTokens >= upg.price && 
+            upg.level < upg.maxLevel) {
+            
+            // Handle upgrade - deduct Scrap, Tiles and Master Tokens
+            scraps -= upg.scrapPrice;
+            tiles -= upg.tilesPrice;
+            masterTokens -= upg.price;
+            upg.level++;
+
+            // Reveal TilesYard in UI
+            if (tilesyardSection) tilesyardSection.classList.remove('hidden');
+            if (tilesyardSeparator) tilesyardSeparator.classList.remove('hidden');
+            if (tilesyardStatus) tilesyardStatus.textContent = 'Unlocked';
+
+            // UI updates
+            treeInfoBuyBtn.classList.add('hidden');
+            updateMasterTokenUI();
+            updateTilesUI();
+            if (counter) counter.textContent = `Scrap: ${scraps}`;
+            if (typeof updateScrapyardSectionsVisibility === 'function') updateScrapyardSectionsVisibility();
+            // Refresh TilesYard gating status text explicitly
+            updateTilesUI();
+
+            console.log('🧱 TilesYard unlocked via Tree Upgrade 3!');
+        } else if (rebirthCount < upg.rebirth) {
+            alert('You need at least ' + upg.rebirth + ' rebirths to unlock this upgrade!');
+        } else if (!tiresOwned) {
+            alert('You need the Tires upgrade first!');
+        } else if (scraps < upg.scrapPrice) {
+            alert('You don\'t have enough Scrap! Need: ' + upg.scrapPrice);
+        } else if (tiles < upg.tilesPrice) {
+            alert('You don\'t have enough Tires! Need: ' + upg.tilesPrice);
+        } else if (masterTokens < upg.price) {
+            alert('You don\'t have enough Master Tokens! Need: ' + upg.price);
+        } else {
+            alert('This upgrade is already purchased!');
+        }
+    } else if (index === 3) { // Best Scrapyard
+        if (rebirthCount >= upg.rebirth && bricks >= upg.brickPrice && scraps >= upg.scrapPrice && tiles >= upg.tilesPrice && upg.level < upg.maxLevel) {
+            bricks -= upg.brickPrice;
+            scraps -= upg.scrapPrice;
+            tiles -= upg.tilesPrice;
+            upg.level++;
+
+            // If scrapyard purchased, set its tick to 300 scrap per second
+            if (scrapyardPurchased) {
+                if (scrapyardInterval) clearInterval(scrapyardInterval);
+                scrapyardInterval = setInterval(() => {
+                    scraps += 300;
+                    counter.textContent = `Scrap: ${scraps}`;
+                }, 1000);
+            }
+
+            // UI updates
+            treeInfoBuyBtn.classList.add('hidden');
+            updateBrickUI();
+            updateTilesUI();
+            if (counter) counter.textContent = `Scrap: ${scraps}`;
+            updateTreeUI();
+        } else if (rebirthCount < upg.rebirth) {
+            alert('You need at least ' + upg.rebirth + ' rebirths to unlock this upgrade!');
+        } else if (bricks < upg.brickPrice) {
+            alert('You don\'t have enough Bricks! Need: ' + upg.brickPrice);
+        } else if (scraps < upg.scrapPrice) {
+            alert('You don\'t have enough Scrap! Need: ' + upg.scrapPrice);
+        } else if (tiles < upg.tilesPrice) {
+            alert('You don\'t have enough Tires! Need: ' + upg.tilesPrice);
+        } else {
+            alert('This upgrade is already purchased!');
+        }
+    } else if (index === 4) { // Tires Upgrades
+        if (rebirthCount >= upg.rebirth && bricks >= upg.brickPrice && scraps >= upg.scrapPrice && tiles >= upg.tilesPrice && upg.level < upg.maxLevel) {
+            // Deduct currencies
+            bricks -= upg.brickPrice;
+            scraps -= upg.scrapPrice;
+            tiles -= upg.tilesPrice;
+            upg.level++;
+
+            // Unlock Blue Upgrades UI
+            if (blueUpgradeContainer) blueUpgradeContainer.classList.remove('hidden');
+
+            // UI updates
+            treeInfoBuyBtn.classList.add('hidden');
+            updateBrickUI();
+            updateTilesUI();
+            if (counter) counter.textContent = `Scrap: ${scraps}`;
+            updateTreeUI();
+        } else if (rebirthCount < upg.rebirth) {
+            alert('You need at least ' + upg.rebirth + ' rebirths to unlock this upgrade!');
+        } else if (bricks < upg.brickPrice) {
+            alert('You don\'t have enough Bricks! Need: ' + upg.brickPrice);
+        } else if (scraps < upg.scrapPrice) {
+            alert('You don\'t have enough Scrap! Need: ' + upg.scrapPrice);
+        } else if (tiles < upg.tilesPrice) {
+            alert('You don\'t have enough Tires! Need: ' + upg.tilesPrice);
+        } else {
+            alert('This upgrade is already purchased!');
+        }
+    } else if (upg.name === 'Storm') {
+        if (rebirthCount >= upg.rebirth && scraps >= upg.scrapPrice && tiles >= upg.tilesPrice && masterTokens >= upg.price && upg.level < upg.maxLevel) {
+            scraps -= upg.scrapPrice;
+            tiles -= upg.tilesPrice;
+            masterTokens -= upg.price;
+            upg.level++;
+            stormPurchased = true;
+            showStormTimer();
+            scheduleNextStorm(true);
+            treeInfoBuyBtn.classList.add('hidden');
+            updateMasterTokenUI();
+            updateTilesUI();
+            if (counter) counter.textContent = `Scrap: ${scraps}`;
+            updateTreeUI();
+            console.log('⛈️ Storm upgrade purchased!');
+        } else if (rebirthCount < upg.rebirth) {
+            alert('You need at least ' + upg.rebirth + ' rebirths to unlock this upgrade!');
+        } else if (scraps < upg.scrapPrice) {
+            alert('You don\'t have enough Scrap! Need: ' + upg.scrapPrice);
+        } else if (tiles < upg.tilesPrice) {
+            alert('You don\'t have enough Tires! Need: ' + upg.tilesPrice);
+        } else if (masterTokens < upg.price) {
+            alert('You don\'t have enough Master Tokens! Need: ' + upg.price);
         } else {
             alert('This upgrade is already purchased!');
         }
@@ -643,12 +1223,6 @@ scrapImage.addEventListener('click', () => {
             updateMasterTokenUI();
         }
 
-        // Dodaj Brick co 50 Scrap (tylko po 5 rebirth)
-        if (rebirthCount >= 5 && Math.floor(scraps / 50) > Math.floor((scraps - calculateTotalScrap()) / 50)) {
-            bricks++;
-            updateBrickUI();
-        }
-
         canClick = false;
         cooldownBar.style.width = '0%';
 
@@ -684,6 +1258,7 @@ closeUpgrades.addEventListener('click', () => {
 greenUpgradeBtn.addEventListener('click', () => {
     greenUpgradeWindow.classList.remove('hidden');
     greenUpgradeWindow.classList.add('active');
+    updateGreenUpgradeBarrelAvailability(); // Dodano aktualizację dostępności barrel
 });
 closeGreenUpgrade.addEventListener('click', () => {
     greenUpgradeWindow.classList.remove('active');
@@ -709,6 +1284,13 @@ closeScrapyard.addEventListener('click', () => {
     scrapyardWindow.classList.add('hidden'); // Dodaj to!
 });
 buyScrapyardBtn.addEventListener('click', buyScrapyard);
+
+buyBrickBtn.addEventListener('click', buyBrick);
+
+// TilesYard upgrade events
+if (typeof tilesUpgradeBtn !== 'undefined' && tilesUpgradeBtn) {
+    tilesUpgradeBtn.addEventListener('click', handleTilesUpgrade);
+}
 
 starBtn.addEventListener('click', openRebirthWindow);
 
@@ -737,10 +1319,15 @@ updateUpgradeInfo();
 updateScrapyardUI();
 updateRebirthUI();
 updateGreenUpgradeUI();
-updateTreeUI();
+updateGreenUpgradeBarrelAvailability(); // Dodano aktualizację dostępności barrel
+updateScrapyardSectionsVisibility();
 updateMysteryBookUI();
 updateMasterTokenUI();
 updateBrickUI();
+updateTilesUI(); // Initialize Tiles UI
+// Initialize Blue Upgrades visibility
+if (typeof updateScrapyardSectionsVisibility === 'function') updateScrapyardSectionsVisibility();
+if (typeof updateBlueUpgradeUI === 'function') updateBlueUpgradeUI();
 
 // Inicjalizacja Green Upgrade bonusów
 for (let i = 0; i < 6; i++) {
@@ -764,6 +1351,32 @@ treeBtn.addEventListener('click', () => {
     treeWindow.classList.add('active');
     updateTreeUI();
 });
+// Event listeners for Blue Upgrades
+if (blueUpgradeBtn) {
+    blueUpgradeBtn.addEventListener('click', () => {
+        if (blueUpgradeWindow) {
+            blueUpgradeWindow.classList.remove('hidden');
+            blueUpgradeWindow.classList.add('active');
+            if (typeof updateBlueUpgradeUI === 'function') updateBlueUpgradeUI();
+        }
+    });
+}
+if (closeBlueUpgrade) {
+    closeBlueUpgrade.addEventListener('click', () => {
+        if (blueUpgradeWindow) {
+            blueUpgradeWindow.classList.remove('active');
+            blueUpgradeWindow.classList.add('hidden');
+        }
+    });
+}
+
+// Blue better upgrade button listener
+const blueBetterBtn = document.getElementById('blue-better-buy');
+if (blueBetterBtn) {
+    blueBetterBtn.addEventListener('click', () => {
+        buyBlueBetterUpgrade();
+    });
+}
 
 closeTree.addEventListener('click', () => {
     treeWindow.classList.remove('active');
@@ -773,9 +1386,12 @@ closeTree.addEventListener('click', () => {
 // Event listener for tree items click (opens info window)
 function addTreeListeners() {
     for (let x = 0; x < treeUpgrades.length; x++) {
-        document.getElementById('tree-item-' + x).addEventListener('click', () => {
-            updateTreeInfoWindow(x);
-        });
+        const element = document.getElementById('tree-item-' + x);
+        if (element) { // Check if element exists before adding listener
+            element.addEventListener('click', () => {
+                updateTreeInfoWindow(x);
+            });
+        }
     }
 }
 
@@ -794,4 +1410,130 @@ treeInfoBuyBtn.addEventListener('click', () => {
 // Inicjalizacja bonusów na starcie gry
 for (let i = 0; i < 6; i++) {
     updateGreenUpgradeBonus(i);
+}
+
+// Blue Upgrades UI update
+function updateBlueUpgradeUI() {
+    // Better Upgrades
+    const betterLevelEl = document.getElementById('blue-better-level');
+    const betterEffectEl = document.getElementById('blue-better-effect');
+    const betterCostEl = document.getElementById('blue-better-cost');
+    const betterTile = document.getElementById('blue-better-upgrades');
+    if (betterLevelEl && betterTile) {
+        const b = blueUpgrades.better;
+        betterLevelEl.textContent = `Level: ${b.level}/${b.max}`;
+        const mult = (1 + b.level * b.multiplierPerLevel).toFixed(2);
+        betterEffectEl.textContent = `Current: x${mult} ( +0.25x / lvl )`;
+        if (b.level >= b.max) {
+            betterCostEl.textContent = 'MAX';
+            betterTile.style.opacity = 0.6;
+            betterTile.style.pointerEvents = 'none';
+        } else {
+            const cost = getBlueUpgradeCost('better');
+            betterCostEl.textContent = `Cost: ${cost} Tires`;
+            betterTile.style.pointerEvents = 'auto';
+            betterTile.style.opacity = tiles >= cost ? 1 : 0.5;
+        }
+    }
+
+    // The Earnings
+    const earnLevelEl = document.getElementById('blue-earnings-level');
+    const earnEffectEl = document.getElementById('blue-earnings-effect');
+    const earnCostEl = document.getElementById('blue-earnings-cost');
+    const earnTile = document.getElementById('blue-earnings-upgrade');
+    if (earnLevelEl && earnTile && blueUpgrades.earnings) {
+        const e = blueUpgrades.earnings;
+        earnLevelEl.textContent = `Level: ${e.level}/${e.max}`;
+    earnEffectEl.textContent = `Current: +${e.level * e.scrapPerLevel} Scrap/click (+1000 / lvl)`;
+        if (e.level >= e.max) {
+            earnCostEl.textContent = 'MAX';
+            earnTile.style.opacity = 0.6;
+            earnTile.style.pointerEvents = 'none';
+        } else {
+            const cost = getBlueUpgradeCost('earnings');
+            earnCostEl.textContent = `Cost: ${cost} Tires`;
+            earnTile.style.pointerEvents = 'auto';
+            earnTile.style.opacity = tiles >= cost ? 1 : 0.5;
+        }
+    }
+
+    // The Tires
+    const tiresLevelEl = document.getElementById('blue-tires-level');
+    const tiresEffectEl = document.getElementById('blue-tires-effect');
+    const tiresCostEl = document.getElementById('blue-tires-cost');
+    const tiresTile = document.getElementById('blue-tires-upgrade');
+    if (tiresLevelEl && tiresTile && blueUpgrades.tires) {
+        const t = blueUpgrades.tires;
+        tiresLevelEl.textContent = `Level: ${t.level}/${t.max}`;
+        const currentBonus = t.level * t.perLevelBonus;
+        const nextBonus = (t.level + 1) * t.perLevelBonus;
+        if (t.level >= t.max) {
+            tiresEffectEl.textContent = `Active: +${currentBonus} Tires/level total (x${currentBonus})`;
+            tiresCostEl.textContent = 'MAX';
+            tiresTile.style.opacity = 0.6;
+            tiresTile.style.pointerEvents = 'none';
+        } else {
+            tiresEffectEl.textContent = `Current: x${currentBonus || 1} → x${nextBonus} ( +${t.perLevelBonus} / lvl )`;
+            const cost = getBlueUpgradeCost('tires');
+            tiresCostEl.textContent = `Cost: ${cost} Tires`;
+            tiresTile.style.pointerEvents = 'auto';
+            tiresTile.style.opacity = tiles >= cost ? 1 : 0.5;
+        }
+    }
+}
+
+function buyBlueBetterUpgrade() {
+    const u = blueUpgrades.better;
+    if (u.level >= u.max) return;
+    const cost = getBlueUpgradeCost('better');
+    if (tiles < cost) return;
+    tiles -= cost;
+    u.level++;
+    updateTilesUI();
+    updateBlueUpgradeUI();
+    if (typeof saveSystem !== 'undefined') saveSystem.saveGame();
+}
+
+function buyBlueEarningsUpgrade() {
+    const u = blueUpgrades.earnings;
+    if (!u || u.level >= u.max) return;
+    const cost = getBlueUpgradeCost('earnings');
+    if (tiles < cost) return;
+    tiles -= cost;
+    u.level++;
+    updateTilesUI();
+    updateBlueUpgradeUI();
+    if (typeof saveSystem !== 'undefined') saveSystem.saveGame();
+}
+
+function buyBlueTiresUpgrade() {
+    const u = blueUpgrades.tires;
+    if (!u || u.level >= u.max) return;
+    const cost = getBlueUpgradeCost('tires');
+    if (tiles < cost) return;
+    tiles -= cost;
+    u.level++;
+    updateTilesUI();
+    updateBlueUpgradeUI();
+    if (typeof saveSystem !== 'undefined') saveSystem.saveGame();
+}
+
+// Listener dla kafelka (zamiast przycisku)
+const blueBetterTile = document.getElementById('blue-better-upgrades');
+if (blueBetterTile) {
+    blueBetterTile.addEventListener('click', () => {
+        buyBlueBetterUpgrade();
+    });
+}
+const blueEarningsTile = document.getElementById('blue-earnings-upgrade');
+if (blueEarningsTile) {
+    blueEarningsTile.addEventListener('click', () => {
+        buyBlueEarningsUpgrade();
+    });
+}
+const blueTiresTile = document.getElementById('blue-tires-upgrade');
+if (blueTiresTile) {
+    blueTiresTile.addEventListener('click', () => {
+        buyBlueTiresUpgrade();
+    });
 }
