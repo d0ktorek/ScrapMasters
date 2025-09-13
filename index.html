@@ -126,7 +126,7 @@
         <div id="rebirth-count" style="font-size:16px;color:#f1c40f;margin:6px 0 10px;">Rebirth: 0</div>
         <div class="rebirth-description">
             Rebirth resets your progress and grants a rebirth point.<br>
-            Required: 4000 Scrap<br><br>
+            Required: <span id="rebirth-cost-placeholder">...</span> Scrap<br><br>
             <strong>WARNING:</strong> This will reset all your upgrades and scrap!
         </div>
         <button id="confirm-rebirth">Rebirth</button>
@@ -293,7 +293,8 @@
 </div>
 
     <script src="script.js"></script>
-    <script src="savescript.js"></script>
+    <!-- Cache bust for save system -->
+    <script src="savescript.js?v=1.4.1"></script>
     <script src="admincommands.js"></script>
     <!-- Storm Timer (appears after Storm upgrade purchased) -->
     <div id="storm-timer" style="position:fixed;left:12px;bottom:10px;font-family:monospace;font-size:18px;background:rgba(0,0,0,0.45);color:#fff;padding:4px 10px;border-radius:6px;display:none;z-index:5000;">04:00</div>

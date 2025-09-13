@@ -7,7 +7,10 @@ let scrapyardInterval = null;
 let scrapyardPurchased = false;
 const scrapyardCost = 2000;
 let rebirthCount = 0;
-const rebirthCost = 4000;
+// Dynamiczny koszt rebirth: pierwszy 2000, potem x2 za każdy kolejny (2000 * 2^rebirthCount)
+function getCurrentRebirthCost() {
+    return 2000 * Math.pow(2, rebirthCount);
+}
 
 const upgrade1Costs = [5, 15, 35, 80, 120, 160, 320, 850, 1000, 1500, 2000, 2500, 3000, 3200, 3500, 4500, 5500, 6600, 8800, 10000];
 const upgrade2Cost = 50;
@@ -111,7 +114,21 @@ function updateRebirthUI() {
     if (rebirthCountDisplay) {
         rebirthCountDisplay.textContent = `Rebirth: ${rebirthCount}`;
     }
-    // Ensure Blue Upgrades visibility reflects purchase
+    // Dynamiczny koszt w oknie rebirth jeśli element istnieje
+    const costPlaceholder = document.getElementById('rebirth-cost-placeholder');
+    if (costPlaceholder) {
+        costPlaceholder.textContent = getCurrentRebirthCost().toLocaleString();
+    } else {
+        // Fallback: stary sposób jeśli placeholder nie istnieje
+        const rebirthWindowEl = document.getElementById('rebirth-window');
+        if (rebirthWindowEl) {
+            const desc = rebirthWindowEl.querySelector('.rebirth-description');
+            if (desc) {
+                const cost = getCurrentRebirthCost();
+                desc.innerHTML = `Rebirth resets your progress and grants a rebirth point.<br>Required: ${cost.toLocaleString()} Scrap<br><br><strong>WARNING:</strong> This will reset all your upgrades and scrap!`;
+            }
+        }
+    }
     if (blueUpgradeContainer) {
         const blueUnlocked = treeUpgrades && treeUpgrades[4] && treeUpgrades[4].level > 0;
         blueUpgradeContainer.classList.toggle('hidden', !blueUnlocked);
@@ -246,6 +263,7 @@ function buyScrapyard() {
         
         updateScrapyardUI();
         updateRebirthUI(); // <-- dodaj to!
+        if (window.saveSystem) saveSystem.saveGame();
     }
 }
 
@@ -262,7 +280,8 @@ function buyBrick() {
         updateMasterTokenUI();
         updateBrickUI();
         
-        console.log(`🧱 Bought 1 Brick! Cost: ${brickCostScrap} Scrap + ${brickCostTokens} Master Tokens`);
+    console.log(`🧱 Bought 1 Brick! Cost: ${brickCostScrap} Scrap + ${brickCostTokens} Master Tokens`);
+    if (window.saveSystem) saveSystem.saveGame();
     } else {
         if (rebirthCount < 5) {
             alert('You need at least 5 rebirths to buy Brick!');
@@ -275,7 +294,8 @@ function buyBrick() {
 }
 
 function performRebirth() {
-    if (scraps >= rebirthCost) {
+    const cost = getCurrentRebirthCost();
+    if (scraps >= cost) {
         scraps = 0;
         scrapPerClick = 1;
         currentCooldownTime = 5.00;
@@ -309,10 +329,15 @@ function performRebirth() {
 
         upgradeBtn.style.display = scraps >= UPGRADE_UNLOCK ? "block" : "none";
         bookContainer.classList.toggle('hidden', upgradeLevels[2] < 2);
-        starBtn.style.display = rebirthCount > 0 ? "block" : "none";
+    starBtn.style.display = rebirthCount > 0 ? "block" : "none";
+    // Zaktualizuj koszt po zwiększeniu rebirthCount
+    updateRebirthUI();
+    if (window.saveSystem) saveSystem.saveGame();
 
         document.querySelector('.upgrade-item[data-index="1"]').classList.toggle('hidden', upgradeLevels[0] < 2);
         document.querySelector('.upgrade-item[data-index="2"]').classList.toggle('hidden', upgradeLevels[1] < 1);
+    } else {
+        alert(`You need ${cost.toLocaleString()} Scrap for next rebirth!`);
     }
 }
 
@@ -336,6 +361,7 @@ function buyUpgrade(index) {
             
             updateUpgradeInfo();
             updateScrapyardUI();
+            if (window.saveSystem) saveSystem.saveGame();
         }
     } 
     else if (index === 1) {
@@ -361,6 +387,7 @@ function buyUpgrade(index) {
             
             updateUpgradeInfo();
             updateScrapyardUI();
+            if (window.saveSystem) saveSystem.saveGame();
             
             // DOPIERO PO UDANYM ZAKUPIE odblokowuj następny upgrade
             if (upgradeLevels[2] === 0) {
@@ -385,8 +412,9 @@ function buyUpgrade(index) {
 }
         
         counter.textContent = `Scrap: ${scraps}`;
-        updateUpgradeInfo();
-        updateScrapyardUI();
+    updateUpgradeInfo();
+    updateScrapyardUI();
+    if (window.saveSystem) saveSystem.saveGame();
     }
 }
 }

@@ -6,11 +6,37 @@ class SaveSystem {
         this.saveIntervalTime = 60000; // 60 sekund (1 minuta)
     }
 
+    // Zwraca pozostały czas cooldownu (w sekundach z dokładnością) lub 0 jeśli brak
+    getCurrentCooldownTimeLeft() {
+        // Jeśli można klikać, cooldown nie aktywny
+        if (typeof canClick === 'undefined' || canClick) return 0;
+        // Pobierz aktualny tekst timera jeśli istnieje
+        const el = typeof cooldownTimer !== 'undefined' ? cooldownTimer : null;
+        if (el && el.textContent) {
+            const val = parseFloat(el.textContent.replace(/[^0-9.]/g, ''));
+            return isNaN(val) ? 0 : val;
+        }
+        return 0;
+    }
+
+    // Zwraca aktualnie wybraną beczkę (indeks) jeśli globalna logika ją przechowuje
+    getCurrentBarrelIndex() {
+        // W głównym skrypcie może istnieć globalny selectedBarrelIndex albo logika w UI
+        if (typeof selectedBarrelIndex !== 'undefined') return selectedBarrelIndex;
+        // Fallback: brak informacji => 0
+        return 0;
+    }
+
     // Inicjalizacja systemu zapisywania
     init() {
-        this.loadGame();
+        const loaded = this.loadGame();
+        if (!loaded) {
+            // Utwórz pierwszy zapis startowy
+            this.saveGame();
+        }
         this.startAutoSave();
         this.setupBeforeUnloadSave();
+        window.__SAVE_SYSTEM_READY = true;
     }
 
     // Zbieranie wszystkich danych do zapisania
@@ -24,7 +50,7 @@ class SaveSystem {
             
             // Stan klikania i cooldown
             canClick: canClick,
-            cooldownTimeLeft: this.getCurrentCooldownTimeLeft(),
+            cooldownTimeLeft: (typeof this.getCurrentCooldownTimeLeft === 'function') ? this.getCurrentCooldownTimeLeft() : 0,
             
             // Stany upgradów
             upgradeLevels: [...upgradeLevels], // kopiujemy tablicę
@@ -40,7 +66,7 @@ class SaveSystem {
             
             // Green upgrades i bonusy
             scrapBonusPercent: scrapBonusPercent,
-            selectedBarrelIndex: this.getCurrentBarrelIndex(),
+            selectedBarrelIndex: (typeof this.getCurrentBarrelIndex === 'function') ? this.getCurrentBarrelIndex() : 0,
             
             // Mystery Book dane
             masterTokens: masterTokens,
@@ -89,6 +115,10 @@ class SaveSystem {
             const gameData = this.getGameData();
             // (saveVersion już dodany w getGameData)
             localStorage.setItem(this.saveKey, JSON.stringify(gameData));
+            if (console && typeof console.log === 'function') {
+                const size = JSON.stringify(gameData).length;
+                console.log(`💾 Saved (${size} bytes) @ ${new Date().toLocaleTimeString()} (rebirths: ${rebirthCount}, scraps: ${scraps})`);
+            }
             return true;
         } catch (error) {
             console.error('❌ Error saving game:', error);
@@ -714,10 +744,53 @@ class SaveSystem {
         };
         reader.readAsText(file);
     }
+
+    // Diagnostyka stanu systemu zapisu
+    diagnose() {
+        const methods = [
+            'getCurrentCooldownTimeLeft',
+            'getCurrentBarrelIndex',
+            'saveGame',
+            'loadGame'
+        ];
+        const report = {};
+        methods.forEach(m => {
+            report[m] = (typeof this[m] === 'function');
+        });
+        report.instanceType = this.constructor.name;
+        report.readyFlag = !!window.__SAVE_SYSTEM_READY;
+        report.sampleCooldown = typeof this.getCurrentCooldownTimeLeft === 'function' ? this.getCurrentCooldownTimeLeft() : null;
+        console.table(report);
+        return report;
+    }
 }
 
 // Tworzenie globalnej instancji systemu zapisywania
 const saveSystem = new SaveSystem();
+
+// Wersja runtime SaveSystem (do diagnozy cache)
+console.log('[SaveSystem Runtime] v1.4 build', new Date().toISOString());
+
+// Monkey patch (awaryjnie) jeśli pomocnicze metody nie istnieją w instancji
+if (typeof saveSystem.getCurrentCooldownTimeLeft !== 'function') {
+    console.warn('[SaveSystem] Missing getCurrentCooldownTimeLeft on instance – patching');
+    saveSystem.getCurrentCooldownTimeLeft = function() {
+        if (typeof canClick === 'undefined' || canClick) return 0;
+        const el = (typeof cooldownTimer !== 'undefined') ? cooldownTimer : null;
+        if (el && el.textContent) {
+            const v = parseFloat(el.textContent.replace(/[^0-9.]/g, ''));
+            return isNaN(v) ? 0 : v;
+        }
+        return 0;
+    };
+}
+if (typeof saveSystem.getCurrentBarrelIndex !== 'function') {
+    console.warn('[SaveSystem] Missing getCurrentBarrelIndex on instance – patching');
+    saveSystem.getCurrentBarrelIndex = function() {
+        if (typeof selectedBarrelIndex !== 'undefined') return selectedBarrelIndex;
+        return 0;
+    };
+}
 
 // Funkcje pomocnicze dostępne globalnie
 function saveGame() {
@@ -761,6 +834,7 @@ window.loadGame = loadGame;
 window.resetSave = resetSave;
 window.exportSave = exportSave;
 window.Fix = Fix;
+window.saveSystemDiagnose = () => saveSystem.diagnose();
 console.log('💾 ScrapMasters Save System loaded!');
 console.log('🔧 Core console commands: saveGame(), loadGame(), resetSave(), exportSave(), Fix()');
 console.log('ℹ️ Developer/admin commands przeniesione do admincommands.js');
