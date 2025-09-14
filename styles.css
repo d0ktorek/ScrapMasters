@@ -1,0 +1,1457 @@
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background-color: #222;
+    color: white;
+    position: relative;
+}
+
+.version-info {
+    position: fixed;
+    bottom: 10px;
+    right: 10px;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.6);
+    font-family: Arial, sans-serif;
+    z-index: 1000;
+    pointer-events: none;
+}
+
+.game-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex-grow: 1;
+}
+
+#counter {
+    font-size: 42px;
+    margin-bottom: 30px;
+    color: #FFD700;
+}
+
+#scrap-image {
+    width: 120px;
+    height: 200px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-radius: 10px;
+}
+
+#scrap-image:hover {
+    transform: scale(1.03);
+}
+
+#scrap-image:active {
+    transform: scale(0.98);
+}
+
+#cooldown-container {
+    width: 300px;
+    height: 30px;
+    background-color: #444;
+    margin-top: 30px;
+    border-radius: 15px;
+    overflow: hidden;
+    position: relative;
+}
+
+#cooldown-bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #FF8C00, #FFD700);
+    transition: width 0.05s linear;
+}
+
+#cooldown-timer {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 16px;
+    font-weight: bold;
+    color: white;
+}
+
+#upgrade-container {
+    position: static;
+}
+
+#upgrade-btn {
+    width: 100px;
+    height: 100px;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+#upgrade-btn:hover {
+    transform: scale(1.1);
+}
+
+#upgrade-btn:active {
+    transform: scale(0.95);
+}
+
+#upgrade-window {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60%;
+    max-width: 500px;
+    background-color: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(5px);
+    border: 2px solid #FFD700;
+    border-radius: 15px;
+    padding: 20px;
+    z-index: 100;
+    display: none;
+}
+
+#upgrade-window.active {
+    display: block;
+}
+
+.upgrade-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    width: 100%;
+}
+
+.upgrade-item {
+    background-color: rgba(30, 30, 30, 0.8);
+    border: 1px solid #444;
+    border-radius: 10px;
+    padding: 15px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.upgrade-item:hover {
+    border-color: #FFD700;
+    transform: scale(1.03);
+}
+
+.upgrade-item.locked {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.upgrade-title {
+    font-size: 16px;
+    color: #FFD700;
+    margin-bottom: 8px;
+}
+
+.upgrade-level {
+    font-size: 14px;
+    color: #AAA;
+}
+
+.upgrade-cost {
+    font-size: 14px;
+    color: #4CAF50;
+    margin-top: 8px;
+}
+
+#close-upgrades {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+}
+
+#close-upgrades:hover {
+    color: #FF5555;
+}
+
+.upgrade-item.hidden {
+    display: none;
+}
+
+#book-container {
+    position: static;
+    margin-right: auto;
+}
+
+#book-container.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+#book-btn {
+    width: 70px;
+    height: 70px;
+    cursor: pointer;
+    transition: transform 0.2s;
+    filter: drop-shadow(0 0 5px rgba(0, 0, 0, 0.5));
+}
+
+/* Style dla upgrejdu */
+#upgrade-container {
+    position: static; /* Usuwamy fixed positioning */
+    transform: none;
+}
+
+#upgrade-btn {
+    width: 70px;
+    height: 70px;
+    filter: drop-shadow(0 0 5px rgba(0, 0, 0, 0.5));
+}
+
+/* Wspólne style hover */
+#book-btn:hover, #upgrade-btn:hover {
+    transform: scale(1.1);
+}
+
+#book-btn:active, #upgrade-btn:active {
+    transform: scale(0.95);
+}
+
+#bottom-buttons {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    z-index: 50;
+    background-color: rgba(0, 0, 0, 0.5);
+    padding: 10px 20px;
+    border-radius: 50px;
+    backdrop-filter: blur(5px);
+    border: 1px solid #444;
+}
+
+#brick-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 10px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 4px 12px;
+    font-size: 18px;
+    color: #e67e22;
+    font-weight: bold;
+}
+
+#tiles-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 10px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 4px 12px;
+    font-size: 18px;
+    color: #9b59b6;
+    font-weight: bold;
+}
+
+#scrapyard-window {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 70%;
+    max-width: 700px;
+    background-color: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(5px);
+    border: 2px solid #FFD700;
+    border-radius: 15px;
+    padding: 20px;
+    z-index: 100;
+    display: none;
+}
+
+#scrapyard-window.active {
+    display: block;
+}
+
+.scrapyard-content {
+    text-align: center;
+    /* Grid layout to keep ScrapYard | BrickYard | TilesYard perfectly aligned in one row */
+    display: grid;
+    grid-template-columns: 1fr 2px 1fr 2px 1fr; /* sections with thin separators */
+    gap: 30px;
+    align-items: stretch;
+}
+
+.scrapyard-left, #brickyard-section, #tilesyard-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start; /* keep consistent top flow; bottoms handled by margin-top:auto on cost/status */
+    min-height: 400px;
+    height: 430px; /* ujednolicenie wysokości sekcji dla wyrównania */
+    padding: 20px 0;
+    flex: 1;
+}
+
+/* Place items in explicit grid columns to avoid auto-placement glitches */
+.scrapyard-left { grid-column: 1; }
+#brickyard-separator { grid-column: 2; }
+#brickyard-section { grid-column: 3; }
+#tilesyard-separator { grid-column: 4; }
+#tilesyard-section { grid-column: 5; }
+
+.scrapyard-description, .brickyard-description, .tilesyard-description {
+    margin: 15px 0;
+    color: #95a5a6; /* szary */
+    font-size: 14px; /* mniejszy tekst */
+    line-height: 1.35;
+    min-height: 44px; /* stała wysokość opisu dla wyrównania */
+}
+
+/* drobniejsze doprecyzowanie dla tekstów w <small> */
+#brickyard-section small,
+#tilesyard-section small,
+.scrapyard-description small {
+    color: #9aa0a6;
+    font-style: italic;
+    font-size: 12px;
+}
+
+#scrapyard-image {
+    width: 122px;
+    height: 122px;
+    margin: 30px auto 20px auto;
+    border-radius: 10px;
+    transition: all 0.3s;
+    cursor: pointer;
+}
+
+#scrapyard-image:hover {
+    transform: scale(1.05);
+    filter: brightness(1.1);
+}
+
+#scrapyard-image:active {
+    transform: scale(0.98);
+}
+
+#brickyard-image {
+    width: 122px;
+    height: 122px;
+    margin: 30px auto 20px auto;
+    border-radius: 10px;
+    transition: all 0.3s;
+    cursor: pointer;
+}
+
+/* TilesYard image */
+#tilesyard-image {
+    width: 122px;
+    height: 122px;
+    margin: 30px auto 20px auto;
+    border-radius: 10px;
+    transition: all 0.3s;
+    cursor: pointer;
+}
+
+#tilesyard-image:hover {
+    transform: scale(1.05);
+    filter: brightness(1.1);
+}
+
+#tilesyard-image:active {
+    transform: scale(0.98);
+}
+
+#brickyard-image:hover {
+    transform: scale(1.05);
+    filter: brightness(1.1);
+}
+
+#brickyard-image:active {
+    transform: scale(0.98);
+}
+
+#scrapyard-image.purchased {
+    filter: brightness(1) saturate(1);
+}
+
+#scrapyard-cost, #brickyard-cost {
+    font-size: 18px;
+    color: #FFD700;
+    margin: 15px 0;
+    font-weight: bold;
+}
+#scrapyard-cost, #brickyard-cost, #tilesyard-status {
+    margin-top: auto; /* pcha koszt/status i przycisk na dół sekcji */
+    min-height: 22px; /* wyrównanie wysokości linii kosztu/statusu */
+}
+
+/* ujednolicenie odstępów przycisków na dole */
+#buy-scrapyard,
+#buy-brick {
+    margin-top: 10px;
+}
+
+#brickyard-cost {
+    color: #e67e22;
+}
+
+#buy-scrapyard {
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.3s;
+}
+
+#buy-scrapyard:hover {
+    background-color: #45a049;
+    transform: scale(1.05);
+}
+
+#buy-scrapyard:disabled {
+    background-color: #555;
+    cursor: not-allowed;
+}
+
+#buy-brick {
+    background-color: #e67e22;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.3s;
+}
+
+#buy-brick:hover {
+    background-color: #d35400;
+    transform: scale(1.05);
+}
+
+#buy-brick:disabled {
+    background-color: #555;
+    cursor: not-allowed;
+}
+
+#brickyard-separator {
+    background: linear-gradient(180deg, transparent, #34495e, transparent);
+    opacity: 0.7;
+    width: 2px;
+    margin: 0 10px;
+    align-self: stretch; /* fill column height in grid */
+    height: auto;
+}
+
+/* Tilesyard separator */
+#tilesyard-separator {
+    background: linear-gradient(180deg, transparent, #6c5ce7, transparent);
+    opacity: 0.7;
+    width: 2px;
+    margin: 0 10px;
+    align-self: stretch;
+    height: auto;
+}
+
+#brickyard-section h3 {
+    color: #e67e22;
+    margin-bottom: 10px;
+}
+
+/* wyrównanie wysokości nagłówków w trzech kolumnach */
+.scrapyard-left h3,
+#brickyard-section h3,
+#tilesyard-section h3 {
+    min-height: 24px;
+}
+
+/* TilesYard heading and status */
+#tilesyard-section h3 {
+    color: #9b59b6;
+    margin-bottom: 10px;
+}
+
+#tilesyard-status {
+    margin-top: 10px;
+    color: #9b59b6;
+    font-weight: bold;
+}
+
+#tiles-upgrade-level {
+    margin-top: 8px;
+    color: #caa9ff;
+    font-size: 14px;
+}
+
+#tiles-level-label {
+    margin-top: 4px;
+    color: #caa9ff;
+    font-size: 14px;
+}
+
+#tiles-upgrade-btn {
+    background-color: #9b59b6;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.3s;
+    margin-top: 10px; /* matches other buttons */
+}
+
+#tiles-upgrade-btn:hover { background-color: #8e44ad; transform: scale(1.05); }
+#tiles-upgrade-btn:disabled { background-color: #555; cursor: not-allowed; transform: none; }
+
+/* Invisible placeholder to keep TilesYard bottom aligned with BrickYard button */
+/* removed ghost button: no longer needed with flex-start + margin-top:auto bottom alignment */
+
+/* Responsive fallback: stack on small screens */
+@media (max-width: 720px) {
+    .scrapyard-content {
+        grid-template-columns: 1fr; /* single column */
+        gap: 16px;
+    }
+    #brickyard-separator,
+    #tilesyard-separator {
+        display: none;
+    }
+}
+
+#brickyard-section small {
+    color: #95a5a6;
+    font-style: italic;
+}
+
+#close-scrapyard {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+}
+
+#close-scrapyard:hover {
+    color: #FF5555;
+}
+
+#star-container {
+    position: static; /* Zmiana z fixed na static */
+    margin-left: auto; /* Wypycha na prawo */
+}
+
+#star-btn {
+    width: 70px;
+    height: 70px;
+    cursor: pointer;
+    transition: transform 0.2s;
+    filter: drop-shadow(0 0 5px rgba(0, 0, 0, 0.5));
+    display: none;
+}
+
+#star-btn:hover {
+    transform: scale(1.1);
+}
+
+#star-btn:active {
+    transform: scale(0.95);
+}
+
+/* Okno rebirth */
+#rebirth-window {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80%;
+    max-width: 400px;
+    background-color: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(10px);
+    border: 2px solid #FF5555;
+    border-radius: 15px;
+    padding: 20px;
+    z-index: 100;
+    display: none;
+    box-shadow: 0 0 20px rgba(255, 85, 85, 0.3);
+}
+
+#rebirth-window.active {
+    display: block;
+}
+
+.rebirth-content {
+    text-align: center;
+}
+
+.rebirth-description {
+    margin: 15px 0;
+    color: #AAA;
+    line-height: 1.5;
+}
+
+#rebirth-count {
+    font-size: 24px;
+    color: #FFD700;
+    margin: 15px 0;
+    font-weight: bold;
+}
+
+#confirm-rebirth {
+    background: linear-gradient(135deg, #FF5555, #CC0000);
+    color: white;
+    border: none;
+    padding: 12px 25px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    transition: all 0.3s;
+    margin-top: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+#confirm-rebirth:hover {
+    background: linear-gradient(135deg, #FF3333, #AA0000);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+}
+
+#confirm-rebirth:active {
+    transform: translateY(0);
+}
+
+#confirm-rebirth:disabled {
+    background: #555;
+    cursor: not-allowed;
+    transform: none;
+}
+
+#close-rebirth {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+#close-rebirth:hover {
+    color: #FF5555;
+}
+
+.hidden {
+    display: none !important;
+}
+
+#greenupgrade-btn {
+    width: 60px;
+    height: 55px;
+    cursor: pointer;
+    transition: transform 0.2s;
+    filter: drop-shadow(0 0 5px rgba(0, 0, 0, 0.5));
+}
+#greenupgrade-btn:hover {
+    transform: scale(0.8);
+}
+
+/* Blue Upgrades button (bottom bar) */
+#blueupgrade-btn {
+    width: 60px;
+    height: 70px;
+    cursor: pointer;
+    transition: transform 0.2s;
+    filter: drop-shadow(0 0 5px rgba(0, 0, 0, 0.5));
+}
+#blueupgrade-btn:hover {
+    transform: scale(1.1);
+}
+#blueupgrade-btn:active {
+    transform: scale(0.95);
+}
+
+#greenupgrade-window {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60%;
+    max-width: 500px;
+    background-color: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(5px);
+    border: 2px solid #FFD700;
+    border-radius: 15px;
+    padding: 20px;
+    z-index: 100;
+    display: none;
+}
+
+#greenupgrade-window.active {
+    display: block;
+}
+
+.greenupgrade-content {
+    text-align: center;
+}
+
+.greenupgrade-description {
+    margin: 15px 0;
+    color: #AAA;
+    font-size: 1.1em;
+    margin-bottom: 24px;
+}
+
+.greenupgrade-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    justify-content: center;
+}
+
+.greenupgrade-item {
+    background-color: transparent;
+    border: 1px solid #444;
+    border-radius: 12px;
+    padding: 16px 24px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s;
+    min-width: 120px;
+    min-height: 160px;
+}
+
+.greenupgrade-item img {
+    width: 46px;
+    height: 58px;
+    border-radius: 5px;
+    margin-bottom: 8px;
+}
+
+.greenupgrade-item:hover {
+    border-color: #27ae60;
+    transform: scale(1.03);
+}
+
+.greenupgrade-item.equipped {
+    border-color: #FFD700;
+    box-shadow: 0 0 10px rgba(255,215,0,0.4);
+    position: relative;
+}
+.greenupgrade-item.equipped::after {
+    content: 'EQUIPPED';
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    background: linear-gradient(90deg,#f1c40f,#e67e22);
+    color: #000;
+    font-size: 10px;
+    padding: 3px 6px;
+    border-radius: 8px;
+    font-weight: bold;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+}
+
+#close-greenupgrade {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.greenupgrade-button {
+    margin: 12px 0 8px 0;
+    padding: 8px 24px;
+    font-size: 14px;
+    font-weight: bold;
+    color: white;
+    background-color: #27ae60;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.greenupgrade-button:hover {
+    background-color: #219a52;
+    transform: scale(1.05);
+}
+
+/* Blue Upgrades window */
+#blueupgrade-window {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60%;
+    max-width: 520px;
+    background-color: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(5px);
+    border: 2px solid #2196F3; /* blue accent */
+    border-radius: 15px;
+    padding: 20px;
+    z-index: 120;
+    display: none;
+}
+
+#blueupgrade-window.active {
+    display: block;
+}
+
+.blueupgrade-content {
+    text-align: center;
+}
+
+.blueupgrade-description {
+    margin: 15px 0;
+    color: #AAA;
+    font-size: 1.1em;
+    margin-bottom: 24px;
+}
+
+#blueupgrade-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px 32px;
+    justify-items: center;
+    align-items: stretch;
+    position: relative;
+}
+
+/* Center the third tile spanning both columns */
+#blue-earnings-upgrade {
+    grid-column: 1 / span 2;
+    justify-self: center;
+}
+
+/* Ensure consistent internal spacing so height doesn't jump */
+.blueupgrade-item .blueupgrade-title { min-height: 20px; }
+.blueupgrade-item .blueupgrade-level { min-height: 18px; }
+.blueupgrade-item .blueupgrade-effect { min-height: 34px; display:flex; align-items:center; }
+.blueupgrade-item .blueupgrade-cost { min-height: 18px; }
+
+@media (max-width: 520px) {
+    #blueupgrade-grid { grid-template-columns: 1fr; }
+    #blue-earnings-upgrade { grid-column: 1; }
+}
+
+.blueupgrade-item {
+    background-color: transparent;
+    border: 1px solid #444;
+    border-radius: 12px;
+    padding: 16px 24px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s;
+    min-width: 120px;
+    min-height: 160px;
+}
+
+.blueupgrade-item img {
+    width: 46px;
+    height: 58px;
+    border-radius: 5px;
+    margin-bottom: 8px;
+}
+
+.blueupgrade-item:hover {
+    border-color: #2196F3;
+    transform: scale(1.03);
+}
+
+#close-blueupgrade {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+#close-blueupgrade:hover {
+    color: #2196F3;
+}
+
+.blueupgrade-button {
+    margin: 12px 0 8px 0;
+    padding: 8px 24px;
+    font-size: 14px;
+    font-weight: bold;
+    color: white;
+    background-color: #2196F3;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.blueupgrade-button:hover {
+    background-color: #1b7ccc;
+    transform: scale(1.05);
+}
+
+.greenupgrade-button:disabled {
+    background-color: #bbb;
+    cursor: not-allowed;
+}
+
+.greenupgrade-text {
+    margin-top: 5px;
+    font-size: 1.1em;
+    color: #27ae60;
+    text-align: center;
+    font-weight: bold;
+}
+
+#mysterybook-container {
+    position: static;
+    margin-left: auto;
+}
+
+#tree-container {
+    position: static;
+}
+
+#tree-btn {
+    width: 70px;
+    height: 70px;
+    cursor: pointer;
+    transition: transform 0.2s;
+    filter: drop-shadow(0 0 5px rgba(0, 0, 0, 0.5));
+}
+
+#tree-btn:hover {
+    transform: scale(1.1);
+}
+
+#tree-btn:active {
+    transform: scale(0.95);
+}
+
+#mysterybook-window {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60%;
+    max-width: 500px;
+    background-color: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(5px);
+    border: 2px solid #FFD700;
+    border-radius: 15px;
+    padding: 20px;
+    z-index: 100;
+    display: none;
+}
+
+#mysterybook-window.active {
+    display: block;
+}
+
+.mysterybook-content {
+    text-align: center;
+}
+
+.mysterybook-description {
+    margin: 15px 0;
+    color: #AAA;
+    font-size: 1.1em;
+    margin-bottom: 24px;
+}
+
+.mysterybook-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    justify-content: center;
+}
+
+.mysterybook-item {
+    background-color: transparent;
+    border: 1px solid #444;
+    border-radius: 12px;
+    padding: 16px 24px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s;
+    min-width: 100px;
+    min-height: 140px;
+}
+
+.mysterybook-item img {
+    width: 46px;
+    height: 58px;
+    border-radius: 5px;
+    margin-bottom: 8px;
+}
+
+.mysterybook-item:hover {
+    border-color: #FFD700;
+    transform: scale(1.03);
+}
+
+.mysterybook-text {
+    margin-top: 5px;
+    font-size: 12px;
+    color: #FFD700;
+    text-align: center;
+}
+
+#mysterybook-btn {
+    width: 70px;
+    height: 70px;
+    cursor: pointer;
+    transition: transform 0.2s;
+    filter: drop-shadow(0 0 5px rgba(0, 0, 0, 0.5));
+}
+
+#mysterybook-btn:hover {
+    transform: scale(1.1);
+}
+
+#mysterybook-btn:active {
+    transform: scale(0.95);
+}
+
+#master-token-display {
+    margin-top: 20px;
+    text-align: center;
+}
+
+#master-token-count {
+    font-size: 18px;
+    color: #FFD700;
+    font-weight: bold;
+}
+
+.mysterybook-button {
+    margin-top: 5px;
+    padding: 8px 16px;
+    font-size: 12px;
+    font-weight: bold;
+    color: white;
+    background-color: #4CAF50;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.mysterybook-button:hover {
+    background-color: #45a049;
+    transform: scale(1.05);
+}
+
+.mysterybook-button:disabled {
+    background-color: #555;
+    cursor: not-allowed;
+}
+
+.mysterybook-level {
+    font-size: 11px;
+    color: #AAA;
+    text-align: center;
+    margin-top: 3px;
+}
+
+.mysterybook-cost {
+    font-size: 11px;
+    color: #FFD700;
+    text-align: center;
+    margin-top: 3px;
+}
+
+#tree-window {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60%;
+    max-width: 500px;
+    height: auto;
+    background-color: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(5px);
+    border: 2px solid #FFD700;
+    border-radius: 15px;
+    padding: 20px;
+    z-index: 100;
+    display: none;
+}
+
+#tree-window.active {
+    display: block;
+}
+
+.tree-content {
+    text-align: center;
+}
+
+.tree-description {
+    margin: 15px 0;
+    color: #AAA;
+}
+
+.tree-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    width: 100%;
+    margin-top: 10px;
+}
+
+.tree-item {
+    width: 100%;
+    height: 120px;
+    background-color: rgba(30, 30, 30, 0.8);
+    border: 1px solid #444;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s;
+    cursor: pointer;
+}
+
+.tree-item img {
+    width: 40%;
+    height: auto;
+    border-radius: 5px;
+    margin-bottom: 5px;
+}
+
+.tree-item:hover {
+    border-color: #FFD700;
+    transform: scale(1.03);
+}
+
+.tree-text {
+    font-size: 11px;
+    color: #FFD700;
+    text-align: center;
+    margin-bottom: 5px;
+}
+
+.tree-button {
+    margin-top: 5px;
+    padding: 5px 10px;
+    font-size: 12px;
+    font-weight: bold;
+    color: white;
+    background-color: #4CAF50;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.tree-button:hover {
+    background-color: #45a049;
+    transform: scale(1.05);
+}
+
+.tree-button:disabled {
+    background-color: #555;
+    cursor: not-allowed;
+}
+
+.tree-cost {
+    font-size: 10px;
+    color: #FFD700;
+    text-align: center;
+    margin-top: 3px;
+}
+
+#close-tree {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+#close-tree:hover {
+    color: #4CAF50;
+}
+
+#tree-info-window {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60%;
+    max-width: 400px;
+    height: auto;
+    background-color: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(10px);
+    border: 2px solid #4CAF50;
+    border-radius: 15px;
+    padding: 20px;
+    z-index: 150;
+    display: none;
+}
+
+#tree-info-window.active {
+    display: block;
+}
+
+.tree-info-content {
+    text-align: center;
+}
+
+.tree-info-description {
+    margin: 15px 0;
+    color: #AAA;
+    line-height: 1.5;
+}
+
+.tree-info-requirement {
+    font-size: 16px;
+    color: #FFD700;
+    margin: 15px 0;
+    font-weight: bold;
+}
+
+.tree-info-status {
+    font-size: 14px;
+    color: #4CAF50;
+    margin: 10px 0;
+}
+
+.tree-info-button {
+    background: linear-gradient(135deg, #4CAF50, #45a049);
+    color: white;
+    border: none;
+    padding: 12px 25px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    transition: all 0.3s;
+    margin: 15px 0;
+}
+
+.tree-info-button:hover {
+    background: linear-gradient(135deg, #45a049, #3d8b40);
+    transform: translateY(-2px);
+}
+
+.tree-info-button:disabled {
+    background: #555;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Specjalny styl dla przycisku "Bought" */
+.tree-info-button:disabled[data-state="bought"] {
+    background: linear-gradient(135deg, #2196F3, #1976D2);
+    color: white;
+    opacity: 0.8;
+}
+
+.tree-info-button:disabled[data-state="bought"]:before {
+    content: "✓ ";
+    font-weight: bold;
+}
+
+.tree-info-tokens {
+    font-size: 12px;
+    color: #FFD700;
+    margin-top: 10px;
+}
+
+#close-tree-info {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+#close-tree-info:hover {
+    color: #4CAF50;
+}
+
+/* Storm system */
+#storm-cloud {
+    position:fixed;
+    top:-60px; /* push further above visual 0 to hide top edge */
+    left:0;
+    width:100%;
+    height:200px;
+    background:url('assets/storm.png') repeat-x top center;
+    background-size:contain; /* each repeat uses intrinsic height */
+    pointer-events:none;
+    opacity:0;
+    transition:opacity .5s ease;
+    z-index:4000;
+}
+#storm-cloud.active { opacity:1; }
+#storm-timer.storm-owned { display:block !important; }
+
+/* === Mystery Book 2x3 layout override (added) === */
+/* Wymusza układ 2 kolumny x 3 wiersze dla beczek w Mystery Book zamiast piramidy */
+.mysterybook-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: auto;
+    gap: 24px 32px; /* wiersze x kolumny */
+    max-width: 560px;
+    margin: 0 auto 40px;
+    justify-items: stretch;
+    align-items: stretch;
+}
+
+.mysterybook-item {
+    width: 100% !important;
+    margin: 0 !important;
+    display: flex !important;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    min-height: 180px; /* zapewnia jednolitą wysokość */
+    box-sizing: border-box;
+}
+
+/* Neutralizacja ewentualnych przesunięć piramidy */
+.mysterybook-item:nth-child(n) {
+    transform: none !important;
+    left: 0 !important;
+    right: 0 !important;
+}
+
+/* Wyrównanie wewnątrz kafelków: obraz, przycisk, level, cost */
+.mysterybook-item img { margin-bottom: 10px !important; }
+.mysterybook-button { margin-top: 4px !important; }
+.mysterybook-level, .mysterybook-cost { margin-top: 2px !important; }
+
+/* Dopasowanie szerokości kolumn aby wszystkie ramki były spójne */
+.mysterybook-grid > .mysterybook-item { flex: 0 0 auto; }
+
+/* Opcjonalnie wymuszenie takiej samej wysokości ramki dla przycisku */
+.mysterybook-button { min-width: 84px; }
+
+/* Usunięcie potencjalnych różnic szerokości przez 'min-width:100px' w starej sekcji */
+.mysterybook-item { min-width: unset !important; }
+
+/* Responsywność na małych ekranach */
+@media (max-width: 520px) {
+    .mysterybook-grid { gap: 16px 16px; }
+}
+
+/* ===== Mobile scroll support for popup windows ===== */
+@media (max-width: 900px) {
+    /* Wspólne: maksymalna wysokość i przewijanie wewnętrzne */
+    #upgrade-window,
+    #scrapyard-window,
+    #rebirth-window,
+    #greenupgrade-window,
+    #mysterybook-window,
+    #blueupgrade-window,
+    #tree-window,
+    #tree-info-window {
+        max-height: 80vh;
+        overflow: hidden; /* ukryj zewnętrzny scroll */
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* Kontenery treści przewijalne wewnątrz */
+    .upgrade-grid,
+    .scrapyard-content,
+    .rebirth-content,
+    .greenupgrade-content,
+    .mysterybook-content,
+    #blueupgrade-grid,
+    .tree-content,
+    .tree-info-content {
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+        max-height: 100%;
+        padding-right: 6px; /* miejsce na scrollbar */
+    }
+
+    /* Delikatniejsze paski przewijania (Firefox) */
+    .upgrade-grid,
+    .scrapyard-content,
+    .rebirth-content,
+    .greenupgrade-content,
+    .mysterybook-content,
+    #blueupgrade-grid,
+    .tree-content,
+    .tree-info-content {
+        scrollbar-color: #555 #202020;
+    }
+
+    /* WebKit paski (Chrome/Safari/Edge mobilne) */
+    .upgrade-grid::-webkit-scrollbar,
+    .scrapyard-content::-webkit-scrollbar,
+    .rebirth-content::-webkit-scrollbar,
+    .greenupgrade-content::-webkit-scrollbar,
+    .mysterybook-content::-webkit-scrollbar,
+    #blueupgrade-grid::-webkit-scrollbar,
+    .tree-content::-webkit-scrollbar,
+    .tree-info-content::-webkit-scrollbar { width: 6px; }
+    .upgrade-grid::-webkit-scrollbar-track,
+    .scrapyard-content::-webkit-scrollbar-track,
+    .rebirth-content::-webkit-scrollbar-track,
+    .greenupgrade-content::-webkit-scrollbar-track,
+    .mysterybook-content::-webkit-scrollbar-track,
+    #blueupgrade-grid::-webkit-scrollbar-track,
+    .tree-content::-webkit-scrollbar-track,
+    .tree-info-content::-webkit-scrollbar-track { background: rgba(0,0,0,0.25); }
+    .upgrade-grid::-webkit-scrollbar-thumb,
+    .scrapyard-content::-webkit-scrollbar-thumb,
+    .rebirth-content::-webkit-scrollbar-thumb,
+    .greenupgrade-content::-webkit-scrollbar-thumb,
+    .mysterybook-content::-webkit-scrollbar-thumb,
+    #blueupgrade-grid::-webkit-scrollbar-thumb,
+    .tree-content::-webkit-scrollbar-thumb,
+    .tree-info-content::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+    .upgrade-grid::-webkit-scrollbar-thumb:hover,
+    .scrapyard-content::-webkit-scrollbar-thumb:hover,
+    .rebirth-content::-webkit-scrollbar-thumb:hover,
+    .greenupgrade-content::-webkit-scrollbar-thumb:hover,
+    .mysterybook-content::-webkit-scrollbar-thumb:hover,
+    #blueupgrade-grid::-webkit-scrollbar-thumb:hover,
+    .tree-content::-webkit-scrollbar-thumb:hover,
+    .tree-info-content::-webkit-scrollbar-thumb:hover { background: #777; }
+}
+
+/* Dodatkowe zabezpieczenie dla bardzo małych ekranów */
+@media (max-height: 600px) {
+    #mysterybook-window .mysterybook-content,
+    #greenupgrade-window .greenupgrade-content,
+    #blueupgrade-window .greenupgrade-content {
+        max-height: 70vh;
+    }
+}
