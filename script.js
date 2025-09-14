@@ -486,6 +486,9 @@ function updateBarrelImage(index) {
     if (index >= 0 && index < barrelImages.length) {
         scrapImage.src = barrelImages[index];
         selectedBarrelIndex = index;
+        // Ustaw bonus (index = bonus) jeśli logika nie nadpisze później
+        scrapBonusPercent = index;
+        applyBarrelHighlight();
     }
 }
 
@@ -566,8 +569,18 @@ function handleBarrelButtonClick(index) {
     }
     
     updateBarrelImage(index);
-    updateScrapBonus(index);
     if (window.saveSystem) saveSystem.saveGame(); // natychmiast zapisz wybór beczki
+}
+
+function applyBarrelHighlight() {
+    const items = document.querySelectorAll('.greenupgrade-item');
+    items.forEach((item, idx) => {
+        if (idx === selectedBarrelIndex) {
+            item.classList.add('equipped');
+        } else {
+            item.classList.remove('equipped');
+        }
+    });
 }
 
 let bricks = 0;
@@ -1430,6 +1443,8 @@ if (typeof enforceAutoclickerCap === 'function') enforceAutoclickerCap();
 if (upgradeLevels[1] >= AUTOCLICKER_MAX_LEVEL) {
     if (typeof showCooldownUpgrade === 'function') showCooldownUpgrade();
 }
+// Zastosuj highlight wybranej beczki po wczytaniu/save
+if (typeof applyBarrelHighlight === 'function') applyBarrelHighlight();
 
 // Inicjalizacja Green Upgrade bonusów
 for (let i = 0; i < 6; i++) {
@@ -1666,3 +1681,23 @@ document.addEventListener('mousedown', (e) => {
         cfg.el.classList.add('hidden');
     }
 });
+
+// Dodatkowy fallback (deploy np. GitHub Pages czasem gubi mousedown przez overlayy / focus)
+function closeOnOutsideGeneric(e) {
+    const id = e.target && e.target.id;
+    for (const cfg of CLOSE_ON_OUTSIDE) {
+        if (!cfg.el || !cfg.el.classList.contains('active')) continue;
+        if (cfg.triggerIds.includes(id)) return;
+        if (cfg.el.contains(e.target)) return; // wewnątrz – nie zamykaj
+    }
+    // Jeśli dotarliśmy tutaj – klik poza wszystkimi aktywnymi oknami -> zamknij wszystkie aktywne
+    CLOSE_ON_OUTSIDE.forEach(cfg => {
+        if (cfg.el && cfg.el.classList.contains('active')) {
+            cfg.el.classList.remove('active');
+            cfg.el.classList.add('hidden');
+        }
+    });
+}
+
+document.addEventListener('click', closeOnOutsideGeneric);
+document.addEventListener('touchstart', closeOnOutsideGeneric, { passive: true });

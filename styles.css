@@ -747,6 +747,25 @@ body {
     transform: scale(1.03);
 }
 
+.greenupgrade-item.equipped {
+    border-color: #FFD700;
+    box-shadow: 0 0 10px rgba(255,215,0,0.4);
+    position: relative;
+}
+.greenupgrade-item.equipped::after {
+    content: 'EQUIPPED';
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    background: linear-gradient(90deg,#f1c40f,#e67e22);
+    color: #000;
+    font-size: 10px;
+    padding: 3px 6px;
+    border-radius: 8px;
+    font-weight: bold;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+}
+
 #close-greenupgrade {
     position: absolute;
     top: 10px;
