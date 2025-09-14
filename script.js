@@ -9,13 +9,17 @@ const scrapyardCost = 2000;
 let rebirthCount = 0;
 // Dynamiczny koszt rebirth: pierwszy 2000, potem x2 za każdy kolejny (2000 * 2^rebirthCount)
 function getCurrentRebirthCost() {
-    return 2000 * Math.pow(2, rebirthCount);
+    // Zwracaj koszt jako liczba całkowita (ucięcie części po przecinku)
+    return Math.floor(2000 * Math.pow(1.35, rebirthCount));
 }
 
 const upgrade1Costs = [5, 15, 35, 80, 120, 160, 320, 850, 1000, 1500, 2000, 2500, 3000, 3200, 3500, 4500, 5500, 6600, 8800, 10000];
 const upgrade2Cost = 50;
 const upgrade3Costs = [30, 80, 300, 500, 600, 800, 900, 1000, 1300, 1600, 2000, 2500, 3000, 4000, 5000, 6000, 8000, 10000, 12000, 15000, 18000, 22000, 26000, 30000, 35000, 40000, 45000, 50000, 60000, 70000];
 const upgradeLevels = [0, 0, 0];
+
+// Stała: maksymalny poziom Autoclickera (index 1)
+const AUTOCLICKER_MAX_LEVEL = 1;
 
 // Tire system
 let tireInterval = null;
@@ -193,11 +197,10 @@ function updateUpgradeInfo() {
     const currentLevel1 = upgradeLevels[1];
     document.getElementById('upgrade-level-1').textContent = currentLevel1;
     
-    if (currentLevel1 < 1) {
-        document.getElementById('upgrade-cost-1').textContent = 
-            `${upgrade2Cost} Scrap`;
+    if (currentLevel1 < AUTOCLICKER_MAX_LEVEL) {
+        document.getElementById('upgrade-cost-1').textContent = `${upgrade2Cost} Scrap`;
     } else {
-        document.getElementById('upgrade-cost-1').textContent = "MAX";
+        document.getElementById('upgrade-cost-1').textContent = 'MAX';
     }
     
     const currentLevel2 = upgradeLevels[2];
@@ -209,6 +212,52 @@ function updateUpgradeInfo() {
     } else {
         document.getElementById('upgrade-cost-2').textContent = "MAX";
     }
+}
+
+// Upewnia się, że ukryte kafelki upgrade'ów są odsłaniane zgodnie z poziomami (np. cooldown po autoclickerze)
+function refreshUpgradeVisibility() {
+    const upg1 = document.querySelector('.upgrade-item[data-index="1"]'); // Autoclicker
+    const upg2 = document.querySelector('.upgrade-item[data-index="2"]'); // Cooldown
+    if (upg1) {
+        // Autoclicker pokazuje się po osiągnięciu 2 poziomów pierwszego upgrade lub jeśli już został kupiony
+        if (upgradeLevels[0] >= 2 || upgradeLevels[1] > 0) {
+            upg1.classList.remove('hidden');
+        } else {
+            upg1.classList.add('hidden');
+        }
+    }
+    if (upg2) {
+        // Cooldown pokazuje się TYLKO po kupieniu Autoclickera (>=1)
+        if (upgradeLevels[1] >= AUTOCLICKER_MAX_LEVEL) {
+            showCooldownUpgrade();
+        } else {
+            upg2.classList.add('hidden');
+        }
+    }
+}
+
+// Wymusza limit poziomu Autoclickera oraz aktualizuje kafelek na stan MAX
+function enforceAutoclickerCap() {
+    if (upgradeLevels[1] > AUTOCLICKER_MAX_LEVEL) {
+        upgradeLevels[1] = AUTOCLICKER_MAX_LEVEL;
+    }
+    if (upgradeLevels[1] === AUTOCLICKER_MAX_LEVEL) {
+        const tile = document.querySelector('.upgrade-item[data-index="1"]');
+        if (tile) {
+            tile.classList.add('max');
+            tile.style.pointerEvents = 'none';
+        }
+        const costEl = document.getElementById('upgrade-cost-1');
+        if (costEl) costEl.textContent = 'MAX';
+    }
+}
+
+// Pokazuje kafelek cooldown (index 2) niezależnie od wcześniejszego inline display
+function showCooldownUpgrade() {
+    const tile = document.querySelector('.upgrade-item[data-index="2"]');
+    if (!tile) return;
+    tile.classList.remove('hidden');
+    tile.style.display = '';
 }
 
 function updateScrapyardUI() {
@@ -301,10 +350,17 @@ function performRebirth() {
         currentCooldownTime = 5.00;
         upgradeLevels[0] = 0;
         upgradeLevels[1] = 0;
+        upgradeLevels[2] = 0; // reset cooldown level
         scrapyardPurchased = false;
 
         if (autoClickerInterval) clearInterval(autoClickerInterval);
         if (scrapyardInterval) clearInterval(scrapyardInterval);
+        // Po rebirth odblokuj natychmiast możliwość klikania
+        canClick = true;
+        if (cooldownTimer) cooldownTimer.textContent = 'READY';
+        if (cooldownBar) cooldownBar.style.width = '100%';
+        autoClickerInterval = null;
+        scrapyardInterval = null;
 
         rebirthCount++;
         if (rebirthCountDisplay) {
@@ -335,7 +391,8 @@ function performRebirth() {
     if (window.saveSystem) saveSystem.saveGame();
 
         document.querySelector('.upgrade-item[data-index="1"]').classList.toggle('hidden', upgradeLevels[0] < 2);
-        document.querySelector('.upgrade-item[data-index="2"]').classList.toggle('hidden', upgradeLevels[1] < 1);
+        const cooldownTile = document.querySelector('.upgrade-item[data-index="2"]');
+        if (cooldownTile) cooldownTile.classList.add('hidden');
     } else {
         alert(`You need ${cost.toLocaleString()} Scrap for next rebirth!`);
     }
@@ -366,7 +423,7 @@ function buyUpgrade(index) {
     } 
     else if (index === 1) {
         // Sprawdź czy autoclicker już na max poziomie (1)
-        if (upgradeLevels[1] >= 1) {
+            if (upgradeLevels[1] >= AUTOCLICKER_MAX_LEVEL) {
             return; // Już na max poziomie, nie pozwalaj na kolejny upgrade
         }
         
@@ -386,12 +443,14 @@ function buyUpgrade(index) {
             }
             
             updateUpgradeInfo();
+            enforceAutoclickerCap();
             updateScrapyardUI();
             if (window.saveSystem) saveSystem.saveGame();
             
             // DOPIERO PO UDANYM ZAKUPIE odblokowuj następny upgrade
             if (upgradeLevels[2] === 0) {
-                document.querySelector('.upgrade-item[data-index="2"]').classList.remove('hidden');
+                showCooldownUpgrade();
+                if (typeof refreshUpgradeVisibility === 'function') refreshUpgradeVisibility();
             }
         }
     }
@@ -420,10 +479,13 @@ function buyUpgrade(index) {
 }
 
 const barrelImages = ["assets/scrap.png", "assets/barrel1.png", "assets/barrel2.png", "assets/barrel3.png", "assets/barrel4.png", "assets/barrel5.png"];
+// Aktualnie wybrana beczka (0 = domyślna). Zapisywana w save.
+let selectedBarrelIndex = 0;
 
 function updateBarrelImage(index) {
     if (index >= 0 && index < barrelImages.length) {
         scrapImage.src = barrelImages[index];
+        selectedBarrelIndex = index;
     }
 }
 
@@ -505,6 +567,7 @@ function handleBarrelButtonClick(index) {
     
     updateBarrelImage(index);
     updateScrapBonus(index);
+    if (window.saveSystem) saveSystem.saveGame(); // natychmiast zapisz wybór beczki
 }
 
 let bricks = 0;
@@ -1276,6 +1339,8 @@ upgradeBtn.addEventListener('click', () => {
     upgradeWindow.classList.remove('hidden'); // <-- dodaj to
     upgradeWindow.classList.add('active');
     updateUpgradeInfo();
+    if (typeof refreshUpgradeVisibility === 'function') refreshUpgradeVisibility();
+    if (upgradeLevels[1] >= AUTOCLICKER_MAX_LEVEL && typeof showCooldownUpgrade === 'function') showCooldownUpgrade();
 });
 
 closeUpgrades.addEventListener('click', () => {
@@ -1356,6 +1421,15 @@ updateTilesUI(); // Initialize Tiles UI
 // Initialize Blue Upgrades visibility
 if (typeof updateScrapyardSectionsVisibility === 'function') updateScrapyardSectionsVisibility();
 if (typeof updateBlueUpgradeUI === 'function') updateBlueUpgradeUI();
+// Wyrównaj widoczność kafelków upgrade'ów (np. cooldown po re-loadzie gry)
+if (typeof refreshUpgradeVisibility === 'function') refreshUpgradeVisibility();
+// Wymuś limit poziomu Autoclickera po wczytaniu stanu
+if (typeof enforceAutoclickerCap === 'function') enforceAutoclickerCap();
+// Jeśli warunek spełniony pokaż cooldown od razu
+// Pokaż cooldown tylko jeśli Autoclicker został kupiony (zgodnie z zasadą TYLKO po zakupie Autoclickera)
+if (upgradeLevels[1] >= AUTOCLICKER_MAX_LEVEL) {
+    if (typeof showCooldownUpgrade === 'function') showCooldownUpgrade();
+}
 
 // Inicjalizacja Green Upgrade bonusów
 for (let i = 0; i < 6; i++) {
@@ -1565,3 +1639,30 @@ if (blueTiresTile) {
         buyBlueTiresUpgrade();
     });
 }
+
+// === Global click-outside to close open modal windows ===
+// Lista okien z klasą 'active' które mają być zamykane kliknięciem poza nimi
+const CLOSE_ON_OUTSIDE = [
+    { el: upgradeWindow, triggerIds: ['upgrade-btn'] },
+    { el: scrapyardWindow, triggerIds: ['book-btn'] },
+    { el: rebirthWindow, triggerIds: ['star-btn'] },
+    { el: greenUpgradeWindow, triggerIds: ['greenupgrade-btn'] },
+    { el: document.getElementById('mysterybook-window'), triggerIds: ['mysterybook-btn'] },
+    { el: blueUpgradeWindow, triggerIds: ['blueupgrade-btn'] },
+    { el: treeWindow, triggerIds: ['tree-btn'] },
+    { el: treeInfoWindow, triggerIds: [] }
+];
+
+document.addEventListener('mousedown', (e) => {
+    // Jeżeli kliknięto na przycisk otwierający, nie zamykaj (pozwól jego handlerowi zadziałać)
+    const id = e.target && e.target.id;
+    for (const cfg of CLOSE_ON_OUTSIDE) {
+        if (!cfg.el) continue;
+        if (!cfg.el.classList.contains('active')) continue;
+        if (cfg.triggerIds.includes(id)) return; // klik na trigger
+        if (cfg.el.contains(e.target)) continue; // klik wewnątrz okna
+        // Zamknij okno
+        cfg.el.classList.remove('active');
+        cfg.el.classList.add('hidden');
+    }
+});

@@ -186,6 +186,9 @@ class SaveSystem {
             if (gameData.hasScrapyardInterval && scrapyardPurchased && !scrapyardInterval) this.restoreScrapyardInterval();
             if (gameData.hasTireInterval && typeof treeUpgrades !== 'undefined' && treeUpgrades[1].level >= 1 && !tireInterval) this.restoreTireInterval();
             if (gameData.selectedBarrelIndex !== undefined) updateBarrelImage(gameData.selectedBarrelIndex);
+            if (typeof selectedBarrelIndex !== 'undefined' && gameData.selectedBarrelIndex !== undefined) {
+                selectedBarrelIndex = gameData.selectedBarrelIndex;
+            }
             this.updateAllUI();
             if (typeof initStormAfterLoad === 'function') initStormAfterLoad();
             if (savedCooldownTimeLeft > 0) this.restoreCooldownTimer(savedCooldownTimeLeft);
