@@ -1,3 +1,13 @@
-**A new game from the Scrap universe. Fan-made game created by d0ktorek.**
-If you have any errors, please contact me on dc: Rayeenwtf1 🪱
-Have License ✅
+**Welcome to Scrap Masters**
+But, What it this?
+
+A Idle/Clicker themed Fan Game, from the "Scrap" universe.
+But What you can do....?
+
+- Conquer mountains of Scrap
+- Collect New Barrels
+- Be the best
+- Discover New Upgrades
+
+Created By **d0ktorek**, Creator of the icon: **Schrottii**.
+
