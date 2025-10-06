@@ -4,6 +4,7 @@ class SaveSystem {
         this.saveKey = 'scrapMastersGameSave';
         this.autoSaveInterval = null;
         this.saveIntervalTime = 60000; // 60 sekund (1 minuta)
+        this.theme = null; // persisted theme class name (e.g., 'theme-dark')
     }
 
     // Zwraca pozostały czas cooldownu (w sekundach z dokładnością) lub 0 jeśli brak
@@ -98,14 +99,26 @@ class SaveSystem {
             tilesLevel: typeof tilesLevel !== 'undefined' ? tilesLevel : 0,
             hasTireInterval: tireInterval !== null,
             
+            // Wybrany motyw
+            theme: this.theme || (function(){ try { return localStorage.getItem('sm_theme'); } catch { return null; } })(),
+
             // Czas ostatniego zapisu
             lastSaveTime: Date.now(),
             
             // Active storm state (czy burza była w trakcie) – do odtworzenia
             stormActive: (typeof stormActive !== 'undefined') ? stormActive : false,
 
+            // Chat username (persistujemy jeśli istnieje)
+            chatUsername: (function(){
+                try {
+                    if (typeof chatUsername !== 'undefined' && chatUsername) return chatUsername;
+                    const stored = localStorage.getItem('chat_username');
+                    return stored ? stored : null;
+                } catch { return null; }
+            })(),
+
             // Wersja zapisu
-            saveVersion: 1.4
+            saveVersion: 1.5
         };
     }
 
@@ -178,9 +191,14 @@ class SaveSystem {
                 if (typeof stormPurchased !== 'undefined') stormPurchased = !!gameData.storm.purchased;
                 if (typeof nextStormTime !== 'undefined') nextStormTime = gameData.storm.nextStormTime || null;
             }
-            if (typeof gameData.stormActive !== 'undefined' && gameData.stormActive && typeof spawnStormCloud === 'function') {
-                console.log('⛈️ Restoring active storm from save...');
-                spawnStormCloud();
+            // Nie przywracamy trwającego sztormu po odświeżeniu – aktywny sztorm zostaje anulowany.
+            if (typeof gameData.stormActive !== 'undefined' && gameData.stormActive) {
+                console.log('⛈️ Active storm in save ignored (design: reset on refresh). Scheduling new cycle.');
+                // Zaplanuj od nowa pełny interwał (reset timera)
+                if (typeof nextStormTime !== 'undefined') {
+                    try { nextStormTime = Date.now() + (4 * 60 * 1000); } catch {}
+                }
+                if (typeof stormActive !== 'undefined') stormActive = false;
             }
             if (gameData.hasAutoClicker && !autoClickerInterval) this.restoreAutoClicker();
             if (gameData.hasScrapyardInterval && scrapyardPurchased && !scrapyardInterval) this.restoreScrapyardInterval();
@@ -189,17 +207,46 @@ class SaveSystem {
             if (typeof selectedBarrelIndex !== 'undefined' && gameData.selectedBarrelIndex !== undefined) {
                 selectedBarrelIndex = gameData.selectedBarrelIndex;
             }
+            // Theme restore
+            try {
+                this.theme = gameData.theme || this.theme || localStorage.getItem('sm_theme') || 'theme-dark';
+                const root = document.documentElement;
+                const allThemes = ['theme-dark','theme-neon','theme-solar','theme-forest','theme-ocean','theme-candy','theme-retro','theme-midnight'];
+                allThemes.forEach(t => root.classList.remove(t));
+                if (!allThemes.includes(this.theme)) this.theme = 'theme-dark';
+                root.classList.add(this.theme);
+                localStorage.setItem('sm_theme', this.theme);
+            } catch {}
+
             this.updateAllUI();
             if (typeof initStormAfterLoad === 'function') initStormAfterLoad();
             if (savedCooldownTimeLeft > 0) this.restoreCooldownTimer(savedCooldownTimeLeft);
             if (originalVersion < 1.4 && typeof stormPurchased !== 'undefined' && stormPurchased && (!nextStormTime || nextStormTime < Date.now())) {
                 if (typeof scheduleNextStorm === 'function') { scheduleNextStorm(true); console.log('🛠️ Migration 1.4: Scheduled new storm time'); }
             }
-            console.log('✅ Game loaded!', new Date().toLocaleTimeString(), `(save v${originalVersion} -> runtime v1.4)`);
+            // Przywróć chat username jeśli nie istnieje lokalnie
+            try {
+                if (gameData.chatUsername) {
+                    const existing = localStorage.getItem('chat_username');
+                    if (!existing) {
+                        localStorage.setItem('chat_username', gameData.chatUsername);
+                        console.log(`💬 Przywrócono chat username z zapisu: ${gameData.chatUsername}`);
+                    }
+                }
+            } catch {}
+
+            console.log('✅ Game loaded!', new Date().toLocaleTimeString(), `(save v${originalVersion} -> runtime v1.5)`);
             return true;
         } catch (e) {
             console.error('❌ Error loading game:', e); console.log('🔄 Starting new game'); return false;
         }
+    }
+
+    // External setter used by theme switcher
+    setTheme(themeClassName) {
+        this.theme = themeClassName;
+        // Optionally auto-save quickly after theme change
+        this.saveGame();
     }
 
     // Przywracanie auto clickera
@@ -207,7 +254,7 @@ class SaveSystem {
         if (upgradeLevels[1] > 0) {
             autoClickerInterval = setInterval(() => {
                 scraps += 1;
-                counter.textContent = `Scrap: ${scraps}`;
+                    try { counter.textContent = `Scrap: ${Math.floor(scraps).toLocaleString()}`; } catch { counter.textContent = `Scrap: ${Math.floor(scraps)}`; }
             }, 1000);
         }
     }
@@ -226,7 +273,7 @@ class SaveSystem {
             // Tick every second and add computed amount
             scrapyardInterval = setInterval(() => {
                 scraps += perSecond;
-                counter.textContent = `Scrap: ${scraps}`;
+                    try { counter.textContent = `Scrap: ${Math.floor(scraps).toLocaleString()}`; } catch { counter.textContent = `Scrap: ${Math.floor(scraps)}`; }
             }, 1000);
         }
     }
@@ -353,6 +400,17 @@ class SaveSystem {
         if (upgradeItem2 && upgradeLevels[1] >= 1) {
             upgradeItem2.classList.remove('hidden');
         }
+        // Odblokuj Funny Joke (upgrade index 3) jeśli cooldown >= 5
+        const upgradeItem3 = document.querySelector('.upgrade-item[data-index="3"]');
+        if (upgradeItem3 && upgradeLevels[2] >= 5) {
+            upgradeItem3.classList.remove('hidden');
+        }
+        // Odblokuj Mass Trash (upgrade index 4) jeśli Funny Joke >= 4
+        const upgradeItem4 = document.querySelector('.upgrade-item[data-index="4"]');
+        if (upgradeItem4 && upgradeLevels[3] >= 4) {
+            upgradeItem4.classList.remove('hidden');
+        }
+        // Bomblike removed
         
         // Odblokuj book (scrapyard) jeśli cooldown upgrade >= 2
         if (bookContainer && upgradeLevels[2] >= 2) {
@@ -415,7 +473,7 @@ class SaveSystem {
     // Aktualizacja całego interfejsu po wczytaniu
     updateAllUI() {
         // Aktualizacja counter
-        counter.textContent = `Scrap: ${scraps}`;
+            try { counter.textContent = `Scrap: ${Math.floor(scraps).toLocaleString()}`; } catch { counter.textContent = `Scrap: ${Math.floor(scraps)}`; }
         
         // NAJPIERW odblokuj elementy na podstawie postępu
         this.unlockUIElementsBasedOnProgress();
@@ -574,7 +632,7 @@ class SaveSystem {
         
         // Resetuj wszystkie koszty barrel do początkowych wartości
         if (typeof barrelCosts !== 'undefined') {
-            const initialBarrelCosts = [1, 2, 4, 8, 16, 32];
+            const initialBarrelCosts = [1, 2, 4, 8, 16, 32, 64, 128, 256];
             for (let i = 0; i < barrelCosts.length && i < initialBarrelCosts.length; i++) {
                 barrelCosts[i] = initialBarrelCosts[i];
             }
@@ -628,8 +686,7 @@ class SaveSystem {
             
             // Naprawa upgradów - ustaw maksymalne limity
             if (typeof upgradeLevels !== 'undefined') {
-                // Upgrade 0: max 20 poziomów
-                if (upgradeLevels[0] > 20) upgradeLevels[0] = 20;
+                // Upgrade 0: now unlimited levels; only clamp below 0
                 if (upgradeLevels[0] < 0) upgradeLevels[0] = 0;
                 
                 // Upgrade 1 (autoclicker): max 1 poziom
@@ -644,7 +701,7 @@ class SaveSystem {
             // Naprawa barrel levels
             if (typeof barrelLevels !== 'undefined') {
                 for (let i = 0; i < barrelLevels.length; i++) {
-                    if (barrelLevels[i] > 5) barrelLevels[i] = 5; // max 5 poziomów
+                    if (barrelLevels[i] > 5) barrelLevels[i] = 5; // max 5 poziomów (unchanged)
                     if (barrelLevels[i] < 0) barrelLevels[i] = 0;
                 }
             }
@@ -659,14 +716,14 @@ class SaveSystem {
             
             // Naprawa barrel costs - przywróć do normalnych wartości jeśli są zbyt wysokie
             if (typeof barrelCosts !== 'undefined') {
-                const maxBarrelCosts = [1024, 2048, 4096, 8192, 16384, 32768]; // maksymalne rozsądne koszty
+                const maxBarrelCosts = [1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144]; // maksymalne rozsądne koszty (extended)
                 for (let i = 0; i < barrelCosts.length; i++) {
                     if (barrelCosts[i] > maxBarrelCosts[i]) {
                         // Przywróć do początkowego kosztu i podnieś zgodnie z poziomem
                         const initialCost = [1, 2, 4, 8, 16, 32][i];
                         barrelCosts[i] = initialCost * Math.pow(2, barrelLevels[i]);
                     }
-                    if (barrelCosts[i] < 1) barrelCosts[i] = [1, 2, 4, 8, 16, 32][i];
+                    if (barrelCosts[i] < 1) barrelCosts[i] = [1, 2, 4, 8, 16, 32, 64, 128, 256][i];
                 }
             }
             
@@ -772,7 +829,7 @@ class SaveSystem {
 const saveSystem = new SaveSystem();
 
 // Wersja runtime SaveSystem (do diagnozy cache)
-console.log('[SaveSystem Runtime] v1.4 build', new Date().toISOString());
+console.log('[SaveSystem Runtime] v1.5 build', new Date().toISOString());
 
 // Monkey patch (awaryjnie) jeśli pomocnicze metody nie istnieją w instancji
 if (typeof saveSystem.getCurrentCooldownTimeLeft !== 'function') {

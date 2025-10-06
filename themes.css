@@ -1,0 +1,152 @@
+:root {
+  /* Default (Dark)*/
+  --bg: #222;
+  --text: #ffffff;
+  --muted: #aaa;
+  --accent: #FFD700; /* gold */
+  --accent-2: #4CAF50; /* green */
+  --panel: rgba(0,0,0,0.6);
+  --panel-strong: rgba(0,0,0,0.8);
+  --border: #444;
+}
+
+/* Theme 1: Dark (default) */
+:root.theme-dark {
+  --bg: #222;
+  --text: #ffffff;
+  --muted: #b9c0c7;
+  --accent: #FFD700;
+  --accent-2: #4CAF50;
+  --panel: rgba(0,0,0,0.6);
+  --panel-strong: rgba(0,0,0,0.8);
+  --border: #444;
+}
+
+/* Theme 2: Neon (vibrant) */
+:root.theme-neon {
+  --bg: #0b0f14;
+  --text: #e8f7ff;
+  --muted: #a8b3c1;
+  --accent: #4aa3ff;
+  --accent-2: #ff66d9;
+  --panel: rgba(5,10,18,0.75);
+  --panel-strong: rgba(5,10,18,0.88);
+  --border: #1c3b64;
+}
+
+/* Theme 3: Solar (warm) */
+:root.theme-solar {
+  --bg: #1f1a12;
+  --text: #fff8e7;
+  --muted: #e0d2b2;
+  --accent: #ffcc66;
+  --accent-2: #ff914d;
+  --panel: rgba(25,20,12,0.7);
+  --panel-strong: rgba(25,20,12,0.85);
+  --border: #6b5634;
+}
+
+/* Theme 4: Forest (green calm) */
+:root.theme-forest {
+  --bg: #0f1a14;
+  --text: #e7fff2;
+  --muted: #b7d1c2;
+  --accent: #8bc34a;
+  --accent-2: #4caf50;
+  --panel: rgba(10,20,15,0.7);
+  --panel-strong: rgba(10,20,15,0.85);
+  --border: #2e5d46;
+}
+
+/* Theme 5: Ocean (blue calm) */
+:root.theme-ocean {
+  --bg: #0b132b;
+  --text: #eaf6ff;
+  --muted: #b3c8da;
+  --accent: #3a7bd5;
+  --accent-2: #27c2db;
+  --panel: rgba(9,16,34,0.72);
+  --panel-strong: rgba(9,16,34,0.88);
+  --border: #27508c;
+}
+
+/* Theme 6: Candy (playful) */
+:root.theme-candy {
+  --bg: #231022;
+  --text: #fff2fb;
+  --muted: #f0cbe6;
+  --accent: #ff77aa;
+  --accent-2: #77e3ff;
+  --panel: rgba(35,16,34,0.7);
+  --panel-strong: rgba(35,16,34,0.86);
+  --border: #934a85;
+}
+
+/* Theme 7: Retro (amber/teal) */
+:root.theme-retro {
+  --bg: #102a27;
+  --text: #fff4d8;
+  --muted: #e2d0a5;
+  --accent: #ffcc00;
+  --accent-2: #009688;
+  --panel: rgba(12,40,37,0.68);
+  --panel-strong: rgba(12,40,37,0.84);
+  --border: #2b6f67;
+}
+
+/* Theme 8: Midnight (deep dark) */
+:root.theme-midnight {
+  --bg: #0a0a0f;
+  --text: #e6e6f0;
+  --muted: #b1b1c8;
+  --accent: #8a7dff;
+  --accent-2: #00ffa2; 
+  --panel: rgba(5,5,12,0.72);
+  --panel-strong: rgba(5,5,12,0.86);
+  --border: #2c2c46;
+}
+
+
+body { background-color: var(--bg); color: var(--text); }
+
+
+.version-info { color: color-mix(in oklab, var(--text) 60%, transparent); }
+#counter { color: var(--accent); }
+
+
+#upgrade-window,
+#scrapyard-window,
+#rebirth-window,
+#greenupgrade-window,
+#mysterybook-window,
+#blueupgrade-window,
+#tree-window,
+#tree-info-window,
+#settings-window { background-color: var(--panel); }
+
+
+#upgrade-window,
+#scrapyard-window,
+#rebirth-window,
+#greenupgrade-window,
+#mysterybook-window,
+#blueupgrade-window,
+#tree-window,
+#tree-info-window,
+#settings-window { border-color: var(--border); }
+
+
+.upgrade-title, .tree-text, .mysterybook-text, .mysterybook-cost,
+#scrapyard-cost, #brickyard-cost, #master-token-count,
+.settings-stats .label { color: var(--accent); }
+
+
+#buy-scrapyard, .mysterybook-button, .tree-button, .greenupgrade-button, .blueupgrade-button,
+.settings-actions button { background-color: var(--accent-2); }
+
+#buy-scrapyard:hover, .mysterybook-button:hover, .tree-button:hover, .greenupgrade-button:hover, .blueupgrade-button:hover,
+.settings-actions button:hover { filter: brightness(1.05); }
+
+
+.upgrade-item, .mysterybook-item, .greenupgrade-item, .blueupgrade-item, .tree-item,
+.settings-stats { border-color: var(--border); }
