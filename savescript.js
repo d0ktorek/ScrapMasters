@@ -104,6 +104,9 @@ class SaveSystem {
 
             // Czas ostatniego zapisu
             lastSaveTime: Date.now(),
+
+            // Inventory (non-stacking, up to 6 items)
+            inventory: Array.isArray(window.inventory) ? window.inventory.map(it => ({ id: it.id, name: it.name, rarity: it.rarity, price: it.price })) : [],
             
             // Active storm state (czy burza była w trakcie) – do odtworzenia
             stormActive: (typeof stormActive !== 'undefined') ? stormActive : false,
@@ -207,6 +210,13 @@ class SaveSystem {
             if (typeof selectedBarrelIndex !== 'undefined' && gameData.selectedBarrelIndex !== undefined) {
                 selectedBarrelIndex = gameData.selectedBarrelIndex;
             }
+            // Restore inventory
+            try {
+                if (Array.isArray(gameData.inventory)) {
+                    window.inventory = gameData.inventory.slice(0, 6).map(it => ({ id: it.id, name: it.name, rarity: it.rarity, price: it.price }));
+                    if (typeof updateInventoryUI === 'function') updateInventoryUI();
+                }
+            } catch {}
             // Theme restore
             try {
                 this.theme = gameData.theme || this.theme || localStorage.getItem('sm_theme') || 'theme-dark';
@@ -533,12 +543,26 @@ class SaveSystem {
     // Zapisywanie przed zamknięciem strony
     setupBeforeUnloadSave() {
         window.addEventListener('beforeunload', (event) => {
+            try {
+                const skip = localStorage.getItem('sm_skip_next_save');
+                if (skip === '1') {
+                    localStorage.removeItem('sm_skip_next_save');
+                    return; // Skip saving on purpose (e.g., immediately after import)
+                }
+            } catch {}
             this.saveGame();
         });
 
         // Również zapisuj przy opuszczeniu strony (np. zmiana karty)
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'hidden') {
+                try {
+                    const skip = localStorage.getItem('sm_skip_next_save');
+                    if (skip === '1') {
+                        localStorage.removeItem('sm_skip_next_save');
+                        return; // Skip saving on purpose (e.g., immediately after import)
+                    }
+                } catch {}
                 this.saveGame();
             }
         });

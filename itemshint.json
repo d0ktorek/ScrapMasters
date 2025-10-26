@@ -1,0 +1,11 @@
+{
+  "test1": "Test Item 1: Increases Scrap gain by a small amount for a short time.",
+  "test2": "Test Item 2: Temporarily reduces cooldown by 25%.",
+  "test3": "Test Item 3: Grants a burst of auto-clicks for 10 seconds.",
+  "low_cooldown": "Sets click cooldown to 1.00s for 60 seconds when used.",
+  "sunny_day": "For 2 minutes, your main barrel changes randomly every 1 second and counts as max level.",
+  "runny_day": "Spawns a storm of 40 scrap/barrel drops. Each collected drop gives +150 Scrap.",
+  "real_autoclicker": "For 1 minute, auto-clicks the barrel only when cooldown is READY. Does not grant scrap directly; it performs real clicks.",
+  "triple_drops": "For 5 minutes, triples rewards from falling pickups (Bricks, Master Tokens, Tires, and Runny Day Scrap).",
+  "boost_master_tokens": "For 10 minutes, boosts collected Master Tokens: x5 per pickup/click."
+}

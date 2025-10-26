@@ -24,18 +24,66 @@ function updateScrapCounter() {
     }
 }
 
-// Dynamic cost model for +1 Scrap/click: ultra low prices and very gentle growth, infinite levels
+// Dynamic cost model for +1 Scrap/click: keep early levels cheap, soften growth at high levels
 const UPG1_BASE_COST = 1;
-const UPG1_GROWTH = 1.05;
+const UPG1_GROWTH = 1.05;        // L0..150
+const UPG1_SOFTCAP1 = 150;
+const UPG1_GROWTH_2 = 1.02;      // L151..400
+const UPG1_SOFTCAP2 = 400;
+const UPG1_GROWTH_3 = 1.015;     // L401..700
+const UPG1_SOFTCAP3 = 700;
+const UPG1_GROWTH_4 = 1.008;     // L701..1000
+const UPG1_SOFTCAP4 = 1000;
+const UPG1_GROWTH_5 = 1.004;     // L1001..1500
+const UPG1_SOFTCAP5 = 1500;
+const UPG1_GROWTH_6 = 1.002;     // L1501..2300
+const UPG1_SOFTCAP6 = 2300;
+const UPG1_GROWTH_7 = 1.001;     // L2301+
 function getUpgrade1Cost(level) {
-    return Math.floor(UPG1_BASE_COST * Math.pow(UPG1_GROWTH, level));
+    // Segment 1
+    if (level <= UPG1_SOFTCAP1) {
+        return Math.floor(UPG1_BASE_COST * Math.pow(UPG1_GROWTH, level));
+    }
+    // cost at end of seg1
+    const c1 = UPG1_BASE_COST * Math.pow(UPG1_GROWTH, UPG1_SOFTCAP1);
+    const l2 = Math.min(level, UPG1_SOFTCAP2) - UPG1_SOFTCAP1; // levels in seg2
+    if (level <= UPG1_SOFTCAP2) {
+        return Math.floor(c1 * Math.pow(UPG1_GROWTH_2, l2));
+    }
+    // cost at end of seg2
+    const c2 = c1 * Math.pow(UPG1_GROWTH_2, UPG1_SOFTCAP2 - UPG1_SOFTCAP1);
+    const l3 = Math.min(level, UPG1_SOFTCAP3) - UPG1_SOFTCAP2; // levels in seg3
+    if (level <= UPG1_SOFTCAP3) {
+        return Math.floor(c2 * Math.pow(UPG1_GROWTH_3, l3));
+    }
+    // seg4 (701..1000)
+    const c3 = c2 * Math.pow(UPG1_GROWTH_3, UPG1_SOFTCAP3 - UPG1_SOFTCAP2);
+    const l4 = Math.min(level, UPG1_SOFTCAP4) - UPG1_SOFTCAP3;
+    if (level <= UPG1_SOFTCAP4) {
+        return Math.floor(c3 * Math.pow(UPG1_GROWTH_4, l4));
+    }
+    // seg5 (1001..1500)
+    const c4 = c3 * Math.pow(UPG1_GROWTH_4, UPG1_SOFTCAP4 - UPG1_SOFTCAP3);
+    const l5 = Math.min(level, UPG1_SOFTCAP5) - UPG1_SOFTCAP4;
+    if (level <= UPG1_SOFTCAP5) {
+        return Math.floor(c4 * Math.pow(UPG1_GROWTH_5, l5));
+    }
+    // seg6 (1501..2300)
+    const c5 = c4 * Math.pow(UPG1_GROWTH_5, UPG1_SOFTCAP5 - UPG1_SOFTCAP4);
+    const l6 = Math.min(level, UPG1_SOFTCAP6) - UPG1_SOFTCAP5;
+    if (level <= UPG1_SOFTCAP6) {
+        return Math.floor(c5 * Math.pow(UPG1_GROWTH_6, l6));
+    }
+    // seg7 (2301+)
+    const c6 = c5 * Math.pow(UPG1_GROWTH_6, UPG1_SOFTCAP6 - UPG1_SOFTCAP5);
+    const l7 = level - UPG1_SOFTCAP6;
+    return Math.floor(c6 * Math.pow(UPG1_GROWTH_7, l7));
 }
 const upgrade2Cost = 50;
 const upgrade3Costs = [30, 80, 300, 500, 600, 800, 900, 1000, 1300, 1600, 2000, 2500, 3000, 4000, 5000, 6000, 8000, 10000, 12000, 15000, 18000, 22000, 26000, 30000, 35000, 40000, 45000, 50000, 60000, 70000];
-// Funny Joke costs: start small and scale; 20 levels (reduced from 40)
+// Funny Joke: 10 levels
 const upgrade4Costs = [
-    100, 200, 350, 500, 750, 1100, 1600, 2200, 3000, 4000,
-    5200, 6600, 8200, 10000, 12200, 14800, 17800, 21200, 25000, 29200
+    100, 200, 350, 500, 750, 1100, 1600, 2200, 3000, 4000
 ];
 // Mass Scrap costs: even cheaper progression, 10 levels
 const upgrade5Costs = [
@@ -65,7 +113,8 @@ const tilesTierMax = 10;
 
 // Cost to upgrade a single Tier step grows with Level: base 1 + 2 per Level
 function getTilesTierCost() {
-    return 1 + (tilesLevel * 2);
+    // Base 5 Tires +2 per Tiles Level for each Tier step (10 steps per Level)
+    return 5 + (tilesLevel * 2);
 }
 
 // Elementy DOM
@@ -125,6 +174,24 @@ const treeInfoBuyBtn = document.getElementById('tree-info-buy-btn');
 const treeInfoTokens = document.getElementById('tree-info-tokens');
 const treeInfoTitle = document.getElementById('tree-info-title');
 const treeInfoDescription = document.getElementById('tree-info-description');
+// Item Shop DOM
+const itemshopWindow = document.getElementById('itemshop-window');
+const itemshopGrid = document.getElementById('itemshop-grid');
+const itemshopTimerEl = document.getElementById('itemshop-timer');
+const closeItemshop = document.getElementById('close-itemshop');
+// Inventory DOM
+const inventoryBtn = document.getElementById('inventory-btn');
+const inventoryWindow = document.getElementById('inventory-window');
+const inventoryGrid = document.getElementById('inventory-grid');
+const inventoryCountEl = document.getElementById('inventory-count');
+const closeInventory = document.getElementById('close-inventory');
+// Boosts UI DOM
+const boostsBanner = document.getElementById('boosts-banner');
+// Item hint DOM
+const itemhintWindow = document.getElementById('itemhint-window');
+const itemhintTitle = document.getElementById('itemhint-title');
+const itemhintText = document.getElementById('itemhint-text');
+const closeItemhint = document.getElementById('close-itemhint');
 // Chat removed
 // (All global chat UI & socket logic stripped)
 // Blue upgrade UI elements
@@ -132,6 +199,537 @@ const blueUpgradeContainer = document.getElementById('blueupgrade-container');
 const blueUpgradeBtn = document.getElementById('blueupgrade-btn');
 const blueUpgradeWindow = document.getElementById('blueupgrade-window');
 const closeBlueUpgrade = document.getElementById('close-blueupgrade');
+
+// =================
+// Inventory system
+// =================
+const INVENTORY_SLOTS = 6;
+let inventory = []; // array of { id, name, rarity, price? }
+let itemHints = null; // loaded from itemshint.json
+
+function resolveItemIcon(item) {
+    const mapping = {
+        low_cooldown: 'assets/inventory2.png',
+        sunny_day: 'assets/inventory1.png',
+        runny_day: 'assets/scrap.png',
+        real_autoclicker: 'assets/inventory2.png',
+        triple_drops: 'assets/inventory2.png',
+        boost_master_tokens: 'assets/master.png',
+    };
+    return mapping[item.id] || 'assets/itemshop.png';
+}
+
+// =================
+// Boosts system
+// =================
+// Structure: { id, name, untilTs, data }
+const activeBoosts = [];
+let boostsTicker = null;
+let sunnyDayInterval = null;
+let sunnyDayOriginalBarrel = null;
+let sunnyDayCurrentIndex = null;
+// Runny Day storm: simple local storm of scrap/barrels
+let runnyStormActive = false;
+let realAutoClickerInterval = null;
+
+function isUsableItem(it) {
+    if (!it) return false;
+    const id = (it.id || '').toLowerCase();
+    const name = (it.name || '').toLowerCase();
+    const usableIds = ['low_cooldown','sunny_day','runny_day','real_autoclicker','triple_drops','boost_master_tokens'];
+    const usableNames = ['low cooldown','sunny day','runny day','real auto clicker','real autoclicker','triple drops','boost master tokens'];
+    return usableIds.includes(id) || usableNames.includes(name);
+}
+
+function formatRemain(ms) {
+    const s = Math.max(0, Math.ceil(ms / 1000));
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return `${String(m).padStart(2,'0')}:${String(r).padStart(2,'0')}`;
+}
+
+function renderBoosts() {
+    if (!boostsBanner) return;
+    // Remove expired first
+    const now = Date.now();
+    for (let i = activeBoosts.length - 1; i >= 0; i--) {
+        if (activeBoosts[i].untilTs <= now) activeBoosts.splice(i, 1);
+    }
+    boostsBanner.innerHTML = '';
+    if (!activeBoosts.length) {
+        boostsBanner.classList.add('hidden');
+        return;
+    }
+    boostsBanner.classList.remove('hidden');
+    for (const b of activeBoosts) {
+        const badge = document.createElement('div');
+        badge.className = 'boost-badge';
+        const name = document.createElement('span');
+        name.className = 'name';
+        name.textContent = b.name;
+        const time = document.createElement('span');
+        time.className = 'time';
+        time.textContent = formatRemain(b.untilTs - now);
+        badge.appendChild(name);
+        badge.appendChild(time);
+        boostsBanner.appendChild(badge);
+    }
+}
+
+function ensureBoostsTicker() {
+    if (boostsTicker) return;
+    boostsTicker = setInterval(() => {
+        renderBoosts();
+    }, 1000);
+}
+
+function addBoost(b) {
+    // If same id exists, extend/replace
+    const idx = activeBoosts.findIndex(x => x.id === b.id);
+    if (idx >= 0) activeBoosts.splice(idx, 1);
+    activeBoosts.push(b);
+    renderBoosts();
+    ensureBoostsTicker();
+}
+
+function isBoostActive(id) {
+    const now = Date.now();
+    return activeBoosts.some(b => b.id === id && b.untilTs > now);
+}
+
+function getCooldownOverride() {
+    // Low Cooldown sets cooldown to 1.00s
+    if (isBoostActive('low_cooldown')) return 1.00;
+    return null;
+}
+
+function isSunnyDayActive() { return isBoostActive('sunny_day'); }
+
+// Triple Drops: when active, falling pickups give 3x rewards
+function getDropMultiplier() {
+    try { return isBoostActive('triple_drops') ? 3 : 1; } catch { return 1; }
+}
+
+// Boost Master Tokens: when active, Master Token gains are x5
+function getMasterTokenMultiplier() {
+    try { return isBoostActive('boost_master_tokens') ? 5 : 1; } catch { return 1; }
+}
+
+function getAvailableBarrelIndices() {
+    // Respect rebirth gating: index requires rebirth >= index
+    const arr = [];
+    for (let i = 0; i < (typeof barrelImages !== 'undefined' ? barrelImages.length : 0); i++) {
+        if (rebirthCount >= i) arr.push(i);
+    }
+    if (!arr.length) arr.push(0);
+    return arr;
+}
+
+function setTemporaryBarrel(index) {
+    try {
+        if (index >= 0 && index < barrelImages.length) {
+            // Change image and click bonus without altering selectedBarrelIndex or saving
+            scrapImage.src = barrelImages[index];
+            scrapBonusPercent = index;
+            sunnyDayCurrentIndex = index;
+        }
+    } catch {}
+}
+
+function startSunnyDay() {
+    // Save original selected barrel to restore after effect
+    if (sunnyDayInterval) { try { clearInterval(sunnyDayInterval); } catch {} sunnyDayInterval = null; }
+    sunnyDayOriginalBarrel = (typeof selectedBarrelIndex !== 'undefined') ? selectedBarrelIndex : 0;
+    const pool = getAvailableBarrelIndices();
+    // Immediately set a random one
+    setTemporaryBarrel(pool[Math.floor(Math.random() * pool.length)]);
+    sunnyDayInterval = setInterval(() => {
+        const poolNow = getAvailableBarrelIndices();
+        const next = poolNow[Math.floor(Math.random() * poolNow.length)];
+        setTemporaryBarrel(next);
+    }, 1000);
+}
+
+function stopSunnyDay() {
+    if (sunnyDayInterval) { try { clearInterval(sunnyDayInterval); } catch {} sunnyDayInterval = null; }
+    sunnyDayCurrentIndex = null;
+    // Restore original selected barrel image/bonus
+    if (typeof updateBarrelImage === 'function' && sunnyDayOriginalBarrel != null) {
+        updateBarrelImage(sunnyDayOriginalBarrel);
+    }
+    sunnyDayOriginalBarrel = null;
+}
+
+// ---- Real Auto clicker (Rare): for 60s, auto-clicks when cooldown is READY ----
+function startRealAutoClicker() {
+    if (realAutoClickerInterval) { try { clearInterval(realAutoClickerInterval); } catch {} realAutoClickerInterval = null; }
+    realAutoClickerInterval = setInterval(() => {
+        try {
+            if (isBoostActive && !isBoostActive('real_autoclicker')) { clearInterval(realAutoClickerInterval); realAutoClickerInterval = null; return; }
+        } catch {}
+        if (typeof canClick !== 'undefined' && canClick === true && scrapImage) {
+            // Trigger a real click only when ready
+            scrapImage.click();
+        }
+    }, 50);
+}
+function stopRealAutoClicker() {
+    if (realAutoClickerInterval) { try { clearInterval(realAutoClickerInterval); } catch {} realAutoClickerInterval = null; }
+}
+
+// ---- Runny Day (Uncommon): spawn 40 falling scrap/barrel icons, each worth +150 Scrap on pickup ----
+function chooseRunnyStormImage() {
+    const imgs = [
+        'assets/scrap.png',
+        'assets/barrel1.png', 'assets/barrel2.png', 'assets/barrel3.png', 'assets/barrel4.png', 'assets/barrel5.png',
+        'assets/Barrel6.png', 'assets/Barrel7.png', 'assets/Barrel8.png'
+    ];
+    return imgs[Math.floor(Math.random() * imgs.length)];
+}
+
+function createFallingScrapBarrel() {
+    const el = document.createElement('img');
+    const imgSrc = chooseRunnyStormImage();
+    el.src = imgSrc;
+    const isBarrel = /barrel/i.test(imgSrc);
+    const W = isBarrel ? 76 : 66; // widen barrels by +10px
+    const H = isBarrel ? 76 : 66; // keep earlier +10px height for barrels
+    el.style.cssText = `
+        position: fixed;
+        width: ${W}px; height: ${H}px;
+        z-index: 999;
+        pointer-events: auto; cursor: pointer;
+        top: -80px; left: ${Math.random() * (window.innerWidth - W)}px;
+        animation: fallDown 2.8s linear; transition: transform 0.1s;
+    `;
+    const collect = () => {
+        const base = 150;
+        const mult = (typeof getDropMultiplier === 'function') ? getDropMultiplier() : 1;
+        const gain = base * mult;
+        scraps += gain;
+        if (typeof updateScrapCounter === 'function') updateScrapCounter();
+        try { if (typeof STATS !== 'undefined') { STATS.totalScrapEarned += gain; STATS.sessionScrapEarned = (STATS.sessionScrapEarned||0) + gain; } } catch {}
+        try { if (typeof bumpHighestScraps === 'function') bumpHighestScraps(gain); } catch {}
+        try { requestSyncLeaderboard(); } catch {}
+        el.style.transform = 'scale(1.15)';
+        setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 80);
+        if (typeof saveSystem !== 'undefined') try { saveSystem.saveGame(); } catch {}
+    };
+    el.addEventListener('mouseenter', collect);
+    el.addEventListener('click', collect);
+    el.addEventListener('touchstart', (e) => { try { e.preventDefault(); } catch {} collect(); }, { passive: false });
+    if (!document.getElementById('tire-animation')) {
+        const style = document.createElement('style');
+        style.id = 'tire-animation';
+        style.textContent = `
+            @keyframes fallDown {
+                from { top: -80px; transform: rotate(0deg); }
+                to { top: ${window.innerHeight + 80}px; transform: rotate(720deg); }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    document.body.appendChild(el);
+    setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 2700);
+}
+
+function spawnRunnyDayStorm(count = 40, spacingMs = 150) {
+    if (runnyStormActive) return;
+    runnyStormActive = true;
+    // Show storm cloud like normal storm
+    let cloud = document.getElementById('storm-cloud');
+    if (!cloud) {
+        cloud = document.createElement('div');
+        cloud.id = 'storm-cloud';
+        document.body.appendChild(cloud);
+    }
+    cloud.classList.add('active');
+    for (let i = 0; i < count; i++) {
+        setTimeout(() => {
+            createFallingScrapBarrel();
+            if (i === count - 1) {
+                setTimeout(() => {
+                    runnyStormActive = false;
+                    // Hide cloud shortly after last drop
+                    try { cloud.classList.remove('active'); } catch {}
+                }, 1000);
+            }
+        }, i * spacingMs);
+    }
+}
+
+function updateInventoryUI() {
+    if (inventoryCountEl) inventoryCountEl.textContent = String(inventory.length);
+    if (!inventoryGrid) return;
+    inventoryGrid.innerHTML = '';
+    for (let i = 0; i < INVENTORY_SLOTS; i++) {
+        const slotItem = inventory[i] || null;
+        const card = document.createElement('div');
+        card.className = 'inventory-card' + (slotItem ? '' : ' empty');
+        if (slotItem) {
+            const hint = document.createElement('div');
+            hint.className = 'hint-badge';
+            hint.title = 'Info';
+            hint.addEventListener('click', (e) => { e.stopPropagation(); openItemHint(slotItem); });
+            card.appendChild(hint);
+
+            // Name
+            const name = document.createElement('div');
+            name.className = 'inventory-name';
+            name.textContent = slotItem.name || slotItem.id;
+            card.appendChild(name);
+
+            // Rarity
+            const rarityEl = document.createElement('div');
+            rarityEl.className = 'inventory-rarity ' + (slotItem.rarity ? `rar-${(slotItem.rarity + '').toLowerCase()}` : '');
+            rarityEl.textContent = slotItem.rarity || 'Unknown';
+            card.appendChild(rarityEl);
+
+            // Purchase price
+            const priceEl = document.createElement('div');
+            priceEl.className = 'inventory-price';
+            if (typeof slotItem.price === 'number') priceEl.textContent = `Price: ${slotItem.price}`;
+            else priceEl.textContent = 'Price: —';
+            card.appendChild(priceEl);
+
+            const actions = document.createElement('div');
+            actions.className = 'inventory-actions';
+            // Use button (only for usable items)
+            if (isUsableItem(slotItem)) {
+                const useBtn = document.createElement('button');
+                useBtn.textContent = 'Use';
+                useBtn.addEventListener('click', () => { useInventoryItem(i); });
+                actions.appendChild(useBtn);
+            }
+            const dropBtn = document.createElement('button');
+            dropBtn.textContent = 'Drop';
+            dropBtn.addEventListener('click', () => { removeFromInventory(i); });
+            actions.appendChild(dropBtn);
+            card.appendChild(actions);
+        } else {
+            const name = document.createElement('div');
+            name.className = 'inventory-name';
+            name.textContent = 'Empty';
+            card.appendChild(name);
+        }
+        inventoryGrid.appendChild(card);
+    }
+}
+
+function removeFromInventory(index) {
+    if (index < 0 || index >= inventory.length) return;
+        inventory.splice(index, 1); 
+        try { requestSyncLeaderboard(); } catch {}
+    updateInventoryUI();
+    try { saveSystem.saveGame(); } catch {}
+    try { syncPlayerToServer(); } catch {}
+}
+
+function addToInventory(item) {
+    if (inventory.length >= INVENTORY_SLOTS) return false;
+    inventory.push({ id: item.id, name: item.name, rarity: item.rarity, price: item.price });
+    updateInventoryUI();
+    try { saveSystem.saveGame(); } catch {}
+    try { syncPlayerToServer(); } catch {}
+    return true;
+}
+
+function useInventoryItem(index) {
+    const it = inventory[index];
+    if (!it) return;
+    // Enforce one-item-at-a-time: block if any timed boost active or Runny Day storm active
+    try {
+        const now = Date.now();
+        const anyActiveBoost = activeBoosts && activeBoosts.some(b => b && b.untilTs > now);
+        if (anyActiveBoost || runnyStormActive) {
+            alert('You can only use one item at a time. Wait for the current effect to finish.');
+            return;
+        }
+    } catch {}
+    const id = (it.id || '').toLowerCase();
+    const name = (it.name || '').toLowerCase();
+    const isLowCooldown = (id === 'low_cooldown' || name === 'low cooldown');
+    const isSunnyDay = (id === 'sunny_day' || name === 'sunny day');
+    const isRunnyDay = (id === 'runny_day' || name === 'runny day');
+    const isRealAuto = (id === 'real_autoclicker' || name === 'real auto clicker' || name === 'real autoclicker');
+    const isTripleDrops = (id === 'triple_drops' || name === 'triple drops');
+    const isBoostTokens = (id === 'boost_master_tokens' || name === 'boost master tokens');
+    if (isLowCooldown) {
+        // Apply boost: cooldown fixed to 1.00s for 60s
+        addBoost({ id: 'low_cooldown', name: 'Low Cooldown', untilTs: Date.now() + 60000 });
+        // Consume item
+        removeFromInventory(index);
+        try { saveSystem.saveGame(); } catch {}
+        try { syncPlayerToServer(); } catch {}
+    } else if (isSunnyDay) {
+        // Start Sunny Day: random barrel every 1s; treat current barrel as max level; lasts 120s; cancel on refresh
+        const until = Date.now() + 120000;
+        addBoost({ id: 'sunny_day', name: 'Sunny Day', untilTs: until });
+        // Start effect logic
+        startSunnyDay();
+        setTimeout(() => { stopSunnyDay(); }, 120000);
+        // Consume item
+        removeFromInventory(index);
+        try { saveSystem.saveGame(); } catch {}
+        try { syncPlayerToServer(); } catch {}
+    } else if (isRunnyDay) {
+        // Trigger scrap/barrel storm: 40 drops, each pickup = +150 Scrap
+        spawnRunnyDayStorm(40, 150);
+        // Consume item
+        removeFromInventory(index);
+        try { saveSystem.saveGame(); } catch {}
+        try { syncPlayerToServer(); } catch {}
+    } else if (isRealAuto) {
+        // Start 60s real auto clicker: clicks only when cooldown is ready
+        const until = Date.now() + 60000;
+        addBoost({ id: 'real_autoclicker', name: 'Real Auto clicker', untilTs: until });
+        startRealAutoClicker();
+        setTimeout(() => { stopRealAutoClicker(); }, 60000);
+        // Consume item
+        removeFromInventory(index);
+        try { saveSystem.saveGame(); } catch {}
+        try { syncPlayerToServer(); } catch {}
+    } else if (isTripleDrops) {
+        // Triple Drops: for 5 minutes, all falling pickups grant 3x rewards
+        const until = Date.now() + 300000; // 5 minutes
+        addBoost({ id: 'triple_drops', name: 'Triple Drops', untilTs: until });
+        // Consume item
+        removeFromInventory(index);
+        try { saveSystem.saveGame(); } catch {}
+        try { syncPlayerToServer(); } catch {}
+    } else if (isBoostTokens) {
+        // Boost Master Tokens: for 10 minutes, Master Token gains on collect are x5
+        const until = Date.now() + 600000; // 10 minutes
+        addBoost({ id: 'boost_master_tokens', name: 'Boost Master Tokens', untilTs: until });
+        // Consume item
+        removeFromInventory(index);
+        try { saveSystem.saveGame(); } catch {}
+        try { syncPlayerToServer(); } catch {}
+    } else {
+        // Not usable – optionally show hint
+        openItemHint(it);
+    }
+}
+
+async function syncPlayerToServer() {
+    const proto = (location && location.protocol || '').toLowerCase();
+    if (proto === 'file:') return; // skip when not running via server
+    const username = getStoredNick();
+    if (!username) return;
+    const payload = { username, clientId: getClientId(), inventory: Array.isArray(inventory) ? inventory.slice(0, 6) : [] };
+    try {
+        await fetch('/api/player/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+    } catch {}
+}
+
+async function claimUsernameOnServer(username) {
+    const proto = (location && location.protocol || '').toLowerCase();
+    if (proto === 'file:') return; // no backend in file mode
+    if (!username) return;
+    const payload = { username, clientId: getClientId() };
+    try {
+        const res = await fetch('/api/player/claim', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        let data = null;
+        try { data = await res.json(); } catch { data = null; }
+        if (!res.ok) {
+            if (data && data.error === 'name-taken') {
+                alert('Nick jest zajęty. Wybierz inny.');
+                try { localStorage.removeItem('sm_username'); } catch {}
+                if (typeof chatNameWindow !== 'undefined' && chatNameWindow) chatNameWindow.classList.remove('hidden');
+                if (typeof chatNameInput !== 'undefined' && chatNameInput) { chatNameInput.value = ''; setTimeout(() => chatNameInput.focus(), 0); }
+                return;
+            }
+            return; // silent on other errors
+        }
+        // If server returned inventory for this username, adopt it locally
+        if (data && Array.isArray(data.inventory)) {
+            inventory = data.inventory.slice(0, INVENTORY_SLOTS).map(it => ({ id: it.id, name: it.name, rarity: it.rarity, price: it.price }));
+            updateInventoryUI();
+            try { saveSystem.saveGame(); } catch {}
+        }
+        // Ensure server has the latest local state too
+        await syncPlayerToServer();
+    } catch {
+        // offline or server unreachable – ignore
+    }
+}
+
+// Manual refresh of inventory from server's saved state
+async function reloadInventoryFromServer() {
+    const proto = (location && location.protocol || '').toLowerCase();
+    if (proto === 'file:') { alert('Brak połączenia z serwerem.'); return; }
+    const username = getStoredNick();
+    if (!username) { alert('Ustaw najpierw nick w czacie.'); return; }
+    try {
+        const res = await fetch('/api/player/claim', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, clientId: getClientId() })
+        });
+        let data = null;
+        try { data = await res.json(); } catch { data = null; }
+        if (!res.ok) {
+            if (data && data.error === 'name-taken') {
+                alert('Nick jest zajęty na innym urządzeniu.');
+                return;
+            }
+            throw new Error('HTTP ' + res.status);
+        }
+        if (data && Array.isArray(data.inventory)) {
+            inventory = data.inventory.slice(0, INVENTORY_SLOTS).map(it => ({ id: it.id, name: it.name, rarity: it.rarity, price: it.price }));
+            updateInventoryUI();
+            try { saveSystem.saveGame(); } catch {}
+            try { await syncPlayerToServer(); } catch {}
+        }
+    } catch (e) {
+        alert('Nie udało się odświeżyć ekwipunku.');
+    }
+}
+
+function openInventory() {
+    if (!inventoryWindow) return;
+    inventoryWindow.classList.remove('hidden');
+    inventoryWindow.classList.add('active');
+}
+function closeInventoryWindow() {
+    if (!inventoryWindow) return;
+    inventoryWindow.classList.add('hidden');
+    inventoryWindow.classList.remove('active');
+}
+
+function openItemHint(item) {
+    if (!itemhintWindow) return;
+    if (!itemHints) {
+        fetch('itemshint.json', { cache: 'no-cache' })
+            .then(r => r.ok ? r.json() : {})
+            .then(data => { itemHints = data || {}; showHintNow(item); })
+            .catch(() => { itemHints = {}; showHintNow(item); });
+    } else {
+        showHintNow(item);
+    }
+}
+function showHintNow(item) {
+    const id = item && item.id;
+    const text = (itemHints && itemHints[id]) || 'No description available.';
+    if (itemhintTitle) itemhintTitle.textContent = item.name || id;
+    if (itemhintText) itemhintText.textContent = text;
+    itemhintWindow.classList.remove('hidden');
+    itemhintWindow.classList.add('active');
+}
+function closeItemHintWindow() {
+    if (!itemhintWindow) return;
+    itemhintWindow.classList.add('hidden');
+    itemhintWindow.classList.remove('active');
+}
+
 
 const UPGRADE_UNLOCK = 10;
 
@@ -141,6 +739,626 @@ bookContainer.classList.toggle('hidden', upgradeLevels[2] < 2);  // Ukryj ksią�
 starBtn.style.display = "none";         // Gwiazda ukryta na starcie
 mysteryBookContainer.classList.add('hidden'); // Ukryj mystery book na starcie
 treeContainer.classList.add('hidden'); // Ukryj tree na starcie
+const itemshopBtn = document.getElementById('itemshop-btn');
+if (itemshopBtn) itemshopBtn.classList.add('hidden'); // ukryj itemshop na starcie
+
+// ===== Global Chat (unlocked after 1 Rebirth) =====
+const chatContainer = document.getElementById('chat-container');
+const chatBtn = document.getElementById('earth-btn');
+const leaderboardBtn = document.getElementById('leaderboard-btn');
+const chatWindow = document.getElementById('chat-window');
+const chatMessages = document.getElementById('chat-messages');
+const chatInput = document.getElementById('chat-input');
+const chatSend = document.getElementById('chat-send');
+const chatStatus = document.getElementById('chat-status');
+const closeChat = document.getElementById('close-chat');
+const chatHeader = (function(){ try { return document.querySelector('#chat-window .chat-header'); } catch { return null; } })();
+const chatMinimizeBtn = document.getElementById('chat-minimize');
+// Nickname modal elements
+const chatNameWindow = document.getElementById('chat-name-window');
+const chatNameInput = document.getElementById('chat-name-input');
+const chatNameSave = document.getElementById('chat-name-save');
+const closeChatName = document.getElementById('close-chat-name');
+
+// === Chat moderation state ===
+const CHAT_MUTE_KEYS = { until: 'sm_chat_mute_until', offenses: 'sm_chat_offenses', badwords: 'sm_chat_badwords' };
+let chatMuteTimer = null;
+
+function getMuteUntil() {
+    try { return Number(localStorage.getItem(CHAT_MUTE_KEYS.until)) || 0; } catch { return 0; }
+}
+function setMuteUntil(ts) {
+    try { localStorage.setItem(CHAT_MUTE_KEYS.until, String(ts||0)); } catch {}
+}
+function getOffenses() {
+    try { return Number(localStorage.getItem(CHAT_MUTE_KEYS.offenses)) || 0; } catch { return 0; }
+}
+function setOffenses(n) {
+    try { localStorage.setItem(CHAT_MUTE_KEYS.offenses, String(n||0)); } catch {}
+}
+function getBadwordList() {
+    try {
+        const raw = localStorage.getItem(CHAT_MUTE_KEYS.badwords);
+        if (raw) {
+            const arr = JSON.parse(raw);
+            if (Array.isArray(arr)) return arr.filter(x => typeof x === 'string' && x.trim()).map(x => x.toLowerCase());
+        }
+    } catch {}
+    // Default empty for safety; configure via window.setChatBadwords([...])
+    return [];
+}
+// Admin helper to set badword list at runtime: window.setChatBadwords(['...','...'])
+window.setChatBadwords = function(list) {
+    if (!Array.isArray(list)) return false;
+    try { localStorage.setItem(CHAT_MUTE_KEYS.badwords, JSON.stringify(list)); return true; } catch { return false; }
+};
+
+// Attempt to load external Mute.json once per session
+(function loadMuteJson(){
+    try {
+        // If already configured, skip
+        const existing = localStorage.getItem(CHAT_MUTE_KEYS.badwords);
+        if (existing) return;
+        // Avoid CORS errors when opened via file://; only fetch on http/https
+        const proto = (location && location.protocol || '').toLowerCase();
+        if (proto === 'http:' || proto === 'https:') {
+            fetch('Mute.json', { cache: 'no-cache' })
+                .then(r => r.ok ? r.json() : null)
+                .then(list => { if (Array.isArray(list) && list.length) { window.setChatBadwords(list); } })
+                .catch(() => {});
+        }
+    } catch {}
+})();
+
+function normalizeForModeration(text) {
+    if (!text) return '';
+    let s = String(text).toLowerCase();
+    try { s = s.normalize('NFD').replace(/\p{Diacritic}+/gu, ''); } catch { try { s = s.normalize('NFD').replace(/[\u0300-\u036f]+/g, ''); } catch {} }
+    // simple leet replacements
+    const map = { '0':'o','1':'i','!':'i','3':'e','4':'a','@':'a','5':'s','$':'s','7':'t','9':'g' };
+    s = s.replace(/[0!134@579$]/g, c => map[c] || c);
+    // remove separators/spaces
+    try { s = s.replace(/[^\p{L}\p{N}]+/gu, ''); } catch { s = s.replace(/[^a-z0-9]+/g, ''); }
+    return s;
+}
+
+function messageIsFlagged(text) {
+    const list = getBadwordList();
+    if (!list.length) return false;
+    const norm = normalizeForModeration(text);
+    for (const w of list) {
+        const n = normalizeForModeration(w);
+        if (!n) continue;
+        if (norm.includes(n)) return true;
+    }
+    return false;
+}
+
+function isMuted() {
+    return Date.now() < getMuteUntil();
+}
+
+function formatMs(ms) {
+    const total = Math.max(0, Math.floor(ms/1000));
+    const h = Math.floor(total/3600);
+    const m = Math.floor((total%3600)/60);
+    const s = total%60;
+    const pad = (n) => String(n).padStart(2,'0');
+    return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+
+function ensureChatMuteOverlay() {
+    if (!chatWindow) return null;
+    let overlay = chatWindow.querySelector('.chat-muted-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.className = 'chat-muted-overlay';
+        overlay.innerHTML = `<div class="mute-box"><div class="mute-title">Global Chat zablokowany</div><div class="mute-sub">Naruszenie zasad. Pozostało: <span class="mute-countdown">--:--</span></div></div>`;
+        chatWindow.appendChild(overlay);
+    }
+    return overlay;
+}
+
+function applyMuteStateUI() {
+    const muted = isMuted();
+    const overlay = ensureChatMuteOverlay();
+    if (muted) {
+        chatWindow?.classList.add('muted');
+        if (overlay) overlay.style.display = 'flex';
+        if (chatSend) chatSend.disabled = true;
+        if (chatInput) { chatInput.disabled = true; chatInput.value = ''; }
+        startMuteCountdown();
+    } else {
+        chatWindow?.classList.remove('muted');
+        if (overlay) overlay.style.display = 'none';
+        if (chatInput) chatInput.disabled = false;
+        if (chatSend) setChatConnected(chatSocket && chatSocket.readyState === 1);
+        stopMuteCountdown();
+    }
+}
+
+function startMuteCountdown() {
+    stopMuteCountdown();
+    const until = getMuteUntil();
+    const overlay = ensureChatMuteOverlay();
+    const span = overlay ? overlay.querySelector('.mute-countdown') : null;
+    const tick = () => {
+        const left = until - Date.now();
+        if (span) span.textContent = formatMs(left);
+        if (left <= 0) {
+            setMuteUntil(0);
+            applyMuteStateUI();
+        }
+    };
+    tick();
+    chatMuteTimer = setInterval(tick, 1000);
+}
+function stopMuteCountdown() {
+    if (chatMuteTimer) { clearInterval(chatMuteTimer); chatMuteTimer = null; }
+}
+
+function handleModerationOffense() {
+    let offenses = getOffenses();
+    offenses += 1;
+    setOffenses(offenses);
+    if (offenses === 1) {
+        setMuteUntil(Date.now() + 30 * 60 * 1000); // 30 minutes
+        applyMuteStateUI();
+        appendChatLine({ text: 'Złamanie zasad: blokada pisania na 30 minut.', system: true });
+    } else if (offenses === 2) {
+        setMuteUntil(Date.now() + 2 * 60 * 60 * 1000); // 2 hours
+        applyMuteStateUI();
+        appendChatLine({ text: 'Ponowne złamanie zasad: blokada pisania na 2 godziny.', system: true });
+    } else {
+        try { localStorage.clear(); } catch {}
+        alert('Trzecie złamanie zasad: Twój localStorage został wyczyszczony.');
+        // hard reload to apply wipe
+        try { location.reload(); } catch {}
+    }
+}
+
+let chatSocket = null;
+let chatReconnectTimer = null;
+let chatSending = false; // prevents double send on click+enter
+
+// Stable client identifier to bind username ownership on the server
+function getClientId() {
+    try {
+        let id = localStorage.getItem('sm_client_id');
+        if (!id) {
+            id = Math.random().toString(36).slice(2) + Date.now().toString(36);
+            localStorage.setItem('sm_client_id', id);
+        }
+        return id;
+    } catch {
+        return 'client_' + Math.random().toString(36).slice(2);
+    }
+}
+
+function getStoredNick() {
+    try { return localStorage.getItem('sm_username') || ''; } catch { return ''; }
+}
+function setStoredNick(nick) {
+    try { localStorage.setItem('sm_username', String(nick).slice(0,20)); } catch {}
+    try { claimUsernameOnServer(String(nick).slice(0,20)); } catch {}
+}
+function ensureNickname() {
+    const nick = getStoredNick();
+    if (!nick) {
+        // show modal
+        if (chatNameWindow) chatNameWindow.classList.remove('hidden');
+        if (chatNameInput) { chatNameInput.value = ''; setTimeout(() => chatNameInput.focus(), 0); }
+        return false;
+    }
+    return true;
+}
+
+function updateChatUnlockUI() {
+    // Make the container always visible; show chat icon only after 1 rebirth
+    if (!chatContainer) return;
+    try { chatContainer.classList.remove('hidden'); } catch {}
+    const earth = document.getElementById('earth-btn');
+    if (earth) earth.style.display = (rebirthCount < 1) ? 'none' : '';
+    // Ensure leaderboard is always visible from rebirth 0
+    const lb = document.getElementById('leaderboard-btn');
+    if (lb) lb.style.display = '';
+    // Keep itemshop and inventory gated by rebirths (>=6)
+    const inv = document.getElementById('inventory-btn');
+    const shop = document.getElementById('itemshop-btn');
+    if (inv) inv.classList.toggle('hidden', rebirthCount < 6);
+    if (shop) shop.classList.toggle('hidden', rebirthCount < 6);
+}
+
+function openChatWindow() {
+    if (!chatWindow) return;
+    chatWindow.classList.remove('hidden');
+    chatWindow.classList.add('active');
+    if (!ensureNickname()) return; // ask for nickname first
+    if (!chatSocket || chatSocket.readyState !== 1) connectChat();
+    chatInput?.focus();
+    applyMuteStateUI();
+}
+function closeChatWindow() { if (!chatWindow) return; chatWindow.classList.add('hidden'); chatWindow.classList.remove('active'); }
+
+function appendChatLine({ from = 'System', text = '', time = Date.now(), system = false } = {}) {
+    if (!chatMessages) return;
+    const div = document.createElement('div');
+    div.className = system ? 'chat-msg system' : 'chat-msg';
+    const timeStr = new Date(time).toLocaleTimeString();
+    div.innerHTML = system
+        ? `<span class="from">[System]</span> ${escapeHtml(text)} <span class="time">${timeStr}</span>`
+        : `<span class="from">${escapeHtml(from)}:</span> ${escapeHtml(text)} <span class="time">${timeStr}</span>`;
+    chatMessages.appendChild(div);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function setChatConnected(connected) {
+    if (chatStatus) {
+        chatStatus.textContent = connected ? 'Connected' : 'Disconnected';
+        chatStatus.style.color = connected ? '#27ae60' : 'var(--muted)';
+        chatStatus.style.borderColor = connected ? '#27ae60' : 'var(--border)';
+    }
+    if (chatSend) chatSend.disabled = !connected || !chatInput?.value.trim() || isMuted();
+}
+
+function connectChat() {
+    if (!window.WebSocket) { appendChatLine({ text: 'WebSocket unsupported in this browser.', system: true }); return; }
+    try { if (chatSocket) { chatSocket.close(); chatSocket = null; } } catch {}
+    // Build WS URL based on current page origin and protocol (works locally and behind Cloudflare/HTTPS)
+    let url;
+    try {
+        if (typeof window !== 'undefined' && window.SM_WS_URL) {
+            // Optional override if provided by inline config
+            url = String(window.SM_WS_URL);
+        } else {
+            const proto = (location.protocol === 'https:') ? 'wss' : 'ws';
+            url = `${proto}://${location.host}`; // same host:port as page
+        }
+    } catch {
+        const proto = (typeof location !== 'undefined' && location.protocol === 'https:') ? 'wss' : 'ws';
+        url = `${proto}://localhost:3000`;
+    }
+
+    // Normalize: if page is HTTPS, always use wss and same host (prevents Mixed Content even if old config forces ws://:3000)
+    try {
+        if (location.protocol === 'https:') {
+            const u = new URL(url, location.origin);
+            u.protocol = 'wss:';
+            u.host = location.host; // drop custom ports like :3000 on production
+            url = u.toString();
+        }
+    } catch {
+        if (location && location.protocol === 'https:') url = `wss://${location.host}`;
+    }
+
+    appendChatLine({ text: 'Connecting to chat…', system: true });
+    chatSocket = new WebSocket(url);
+
+    chatSocket.addEventListener('open', () => { setChatConnected(true); appendChatLine({ text: 'Connected to Global Chat.', system: true }); });
+    chatSocket.addEventListener('message', (ev) => {
+        try {
+            const msg = JSON.parse(ev.data);
+            if (msg && typeof msg.text === 'string') {
+                appendChatLine({ from: msg.from || 'Player', text: msg.text, time: msg.time || Date.now() });
+            }
+        } catch {}
+    });
+    chatSocket.addEventListener('close', () => {
+        setChatConnected(false);
+        appendChatLine({ text: 'Disconnected. Reconnecting in 3s…', system: true });
+        if (chatReconnectTimer) clearTimeout(chatReconnectTimer);
+        chatReconnectTimer = setTimeout(connectChat, 3000);
+    });
+    chatSocket.addEventListener('error', () => {
+        setChatConnected(false);
+    });
+}
+
+function sendChatMessage() {
+    if (chatSending) return; // debounce
+    const text = chatInput?.value.trim();
+    if (!text || !chatSocket || chatSocket.readyState !== 1) return;
+    // Block if muted
+    if (isMuted()) { applyMuteStateUI(); return; }
+    // Moderate outgoing message
+    if (messageIsFlagged(text)) {
+        // Clear input and apply offense; do not send
+        if (chatInput) chatInput.value = '';
+        handleModerationOffense();
+        return;
+    }
+    const from = getStoredNick() || `Player${(rebirthCount||0)}`;
+    const payload = { from, text, time: Date.now() };
+    chatSending = true;
+    try {
+        chatSocket.send(JSON.stringify(payload));
+        // nie dodajemy lokalnego echo — serwer odsyła broadcast i pokaże jedną wiadomość
+        chatInput.value = '';
+        setChatConnected(true);
+    } catch {
+        appendChatLine({ text: 'Failed to send.', system: true });
+    } finally {
+        setTimeout(() => { chatSending = false; }, 120); // krótki cooldown przeciw podwójnym wysyłkom
+    }
+}
+
+function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+}
+
+if (chatBtn) chatBtn.addEventListener('click', () => {
+    // On click of chat icon: if no nickname -> open modal, else open chat window
+    if (!ensureNickname()) return;
+    openChatWindow();
+});
+if (closeChat) closeChat.addEventListener('click', closeChatWindow);
+if (chatSend) chatSend.addEventListener('click', sendChatMessage);
+if (chatInput) {
+    chatInput.addEventListener('input', () => setChatConnected(chatSocket && chatSocket.readyState === 1));
+    chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendChatMessage(); } });
+}
+
+// Initialize unlock state at start
+updateChatUnlockUI();
+// Apply mute UI if needed on load
+try { applyMuteStateUI(); } catch {}
+
+// (header toggle removed)
+
+// Restore chat position (minimize removed)
+(function restoreChatState(){
+    if (!chatWindow) return;
+    try {
+        const pos = JSON.parse(localStorage.getItem('sm_chat_pos')||'null');
+        if (pos && typeof pos.left==='number' && typeof pos.top==='number') {
+            chatWindow.style.left = `${pos.left}px`;
+            chatWindow.style.top = `${pos.top}px`;
+            chatWindow.style.right = 'auto';
+            chatWindow.style.position = 'fixed';
+        }
+    } catch {}
+})();
+
+// Drag support for chat window (header as handle)
+(function enableChatDrag(){
+    if (!chatWindow || !chatHeader) return;
+    let dragging = false;
+    let startX = 0, startY = 0, startLeft = 0, startTop = 0;
+
+    const getPos = (e) => {
+        if (e.touches && e.touches[0]) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        return { x: e.clientX, y: e.clientY };
+    };
+
+    const onDown = (e) => {
+        // Ignore drag when clicking header controls
+        const t = e.target;
+        if (t === chatMinimizeBtn || (t && t.closest && t.closest('.chat-actions'))) return;
+        dragging = true;
+        const { x, y } = getPos(e);
+        startX = x; startY = y;
+        const rect = chatWindow.getBoundingClientRect();
+        startLeft = rect.left; startTop = rect.top;
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+        document.addEventListener('touchmove', onMove, { passive: false });
+        document.addEventListener('touchend', onUp);
+        e.preventDefault();
+    };
+
+    const onMove = (e) => {
+        if (!dragging) return;
+        const { x, y } = getPos(e);
+        let nx = startLeft + (x - startX);
+        let ny = startTop + (y - startY);
+        // Constrain within viewport
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const rect = chatWindow.getBoundingClientRect();
+        const w = rect.width, h = rect.height;
+        nx = Math.min(Math.max(nx, 0), vw - w);
+        ny = Math.min(Math.max(ny, 0), vh - h);
+        chatWindow.style.left = `${nx}px`;
+        chatWindow.style.top = `${ny}px`;
+        chatWindow.style.right = 'auto'; // switch to left/top based positioning while dragging
+        chatWindow.style.position = 'fixed';
+        e.preventDefault();
+    };
+
+    const onUp = () => {
+        dragging = false;
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('touchend', onUp);
+        // Persist position
+        try {
+            const rect = chatWindow.getBoundingClientRect();
+            localStorage.setItem('sm_chat_pos', JSON.stringify({ left: rect.left, top: rect.top }));
+        } catch {}
+    };
+
+    chatHeader.addEventListener('mousedown', onDown);
+    chatHeader.addEventListener('touchstart', onDown, { passive: false });
+})();
+
+// Debounced sync helper for leaderboard
+let syncLbTimer = null;
+function requestSyncLeaderboard(delay = 600) {
+    if (syncLbTimer) clearTimeout(syncLbTimer);
+    syncLbTimer = setTimeout(() => { syncLbTimer = null; syncLeaderboardStats(); }, delay);
+}
+
+// Initialize peak tiles from current value
+try { setTimeout(() => { peakTiles = Math.max(peakTiles, Number(tiles)||0); }, 0); } catch {}
+
+// Periodic sync every 60s
+try { setInterval(syncLeaderboardStats, 60000); } catch {}
+
+// Sync on tab hide/exit
+try {
+    window.addEventListener('beforeunload', () => { try { navigator.sendBeacon && navigator.sendBeacon('/api/player/sync', new Blob([JSON.stringify({ username: getStoredNick(), clientId: getClientId(), inventory: (inventory||[]).slice(0,6), stats: { rebirths: (STATS&&STATS.rebirths)||rebirthCount||0, maxScrap: (STATS&&STATS.highestScraps)||0, maxTires: Math.max(peakTiles, (STATS&&STATS.peakTiles)||0) } })], { type: 'application/json' })); } catch {} });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') requestSyncLeaderboard(0); });
+} catch {}
+
+// ===== Leaderboard =====
+const leaderboardWindow = document.getElementById('leaderboard-window');
+const leaderboardList = document.getElementById('leaderboard-list');
+const leaderboardClose = document.getElementById('close-leaderboard');
+const leaderboardTabs = document.querySelectorAll('.lb-tab');
+
+function formatExponent(value) {
+    // Display in scientific notation e.g. 1.23e+6
+    const n = Number(value)||0;
+    if (!isFinite(n)) return '0e+0';
+    const exp = n.toExponential(2);
+    return exp.replace('e+', 'e');
+}
+
+async function fetchLeaderboard(by) {
+    try {
+        const res = await fetch(`/api/player/leaderboard?by=${encodeURIComponent(by)}`);
+        const data = await res.json();
+        if (!data || !data.ok) throw new Error('Bad response');
+        return Array.isArray(data.top) ? data.top : [];
+    } catch {
+        return [];
+    }
+}
+
+function renderLeaderboard(rows, by) {
+    const list = document.getElementById('leaderboard-list');
+    if (!list) return;
+    list.innerHTML = '';
+    rows.forEach(r => {
+        const div = document.createElement('div');
+        div.className = 'leaderboard-row';
+        const valStr = by === 'rebirths' ? String(r.value) : formatExponent(r.value);
+        div.innerHTML = `<div class="leaderboard-rank">${r.rank}</div>`+
+                        `<div class="leaderboard-name">${escapeHtml(r.username)}</div>`+
+                        `<div class="leaderboard-value">${valStr}</div>`;
+        list.appendChild(div);
+    });
+}
+
+async function openLeaderboard(defaultTab = 'rebirths') {
+    const win = document.getElementById('leaderboard-window');
+    if (!win) return;
+    win.classList.remove('hidden');
+    win.classList.add('active');
+    // Bind close button
+    const closeBtn = document.getElementById('close-leaderboard');
+    if (closeBtn && !closeBtn._smBound) { closeBtn.addEventListener('click', closeLeaderboard); closeBtn._smBound = true; }
+    // Bind tab buttons
+    document.querySelectorAll('.lb-tab').forEach(btn => {
+        if (!btn._smBound) { btn.addEventListener('click', () => switchLeaderboardTab(btn.dataset.tab)); btn._smBound = true; }
+    });
+    await switchLeaderboardTab(defaultTab);
+}
+function closeLeaderboard() {
+    const win = document.getElementById('leaderboard-window');
+    if (!win) return;
+    win.classList.add('hidden');
+    win.classList.remove('active');
+}
+
+async function switchLeaderboardTab(tabKey) {
+    document.querySelectorAll('.lb-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tabKey));
+    const rows = await fetchLeaderboard(tabKey);
+    renderLeaderboard(rows, tabKey);
+}
+
+if (leaderboardBtn) {
+    const openLb = () => openLeaderboard('rebirths');
+    leaderboardBtn.addEventListener('click', openLb);
+    leaderboardBtn.addEventListener('mousedown', (e) => { e.preventDefault(); openLb(); });
+    leaderboardBtn.addEventListener('touchstart', (e) => { try { e.preventDefault(); } catch {} openLb(); }, { passive: false });
+} else {
+    // In case DOM loaded later, bind after DOMContentLoaded
+    document.addEventListener('DOMContentLoaded', () => {
+        const btn = document.getElementById('leaderboard-btn');
+        if (!btn) return;
+        const openLb = () => openLeaderboard('rebirths');
+        btn.addEventListener('click', openLb);
+        btn.addEventListener('mousedown', (e) => { e.preventDefault(); openLb(); });
+        btn.addEventListener('touchstart', (e) => { try { e.preventDefault(); } catch {} openLb(); }, { passive: false });
+    });
+}
+if (leaderboardClose) leaderboardClose.addEventListener('click', closeLeaderboard);
+
+// Expose for inline fallback usage from HTML
+try {
+    window.openLeaderboard = openLeaderboard;
+    window.closeLeaderboard = closeLeaderboard;
+} catch {}
+
+// Track and sync leaderboard stats
+let peakTiles = 0; // highest Tires value ever seen this session
+function updatePeaksAfterTilesChange() {
+    peakTiles = Math.max(peakTiles, Number(tiles)||0);
+}
+function updatePeaksAfterScrapChange() {
+    if (!STATS) return; // STATS.highestScraps tracks max scrap including deltas
+    // nothing additional needed; highestScraps updated via grantScrap() elsewhere
+}
+
+async function syncLeaderboardStats() {
+    const proto = (location && location.protocol || '').toLowerCase();
+    if (proto === 'file:') return;
+    const username = getStoredNick();
+    if (!username) return;
+    const payload = {
+        username,
+        clientId: getClientId(),
+        inventory: Array.isArray(inventory) ? inventory.slice(0, 6) : [],
+        stats: {
+            rebirths: (STATS && STATS.rebirths) || rebirthCount || 0,
+            maxScrap: (STATS && STATS.highestScraps) || 0,
+            maxTires: Math.max(peakTiles, (STATS && STATS.peakTiles) || 0)
+        }
+    };
+    try {
+        await fetch('/api/player/sync', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+        });
+    } catch {}
+}
+
+
+// Nickname modal events
+if (chatNameSave) {
+    chatNameSave.addEventListener('click', (e) => {
+        e.preventDefault();
+        const val = (chatNameInput?.value || '').trim().slice(0,20);
+        if (!val) { chatNameInput?.focus(); return; }
+        setStoredNick(val);
+        if (chatNameWindow) chatNameWindow.classList.add('hidden');
+        // if chat is open and socket not connected yet, connect now
+        if (chatWindow && chatWindow.classList.contains('active') && (!chatSocket || chatSocket.readyState !== 1)) {
+            connectChat();
+        }
+    });
+}
+if (closeChatName) {
+    closeChatName.addEventListener('click', () => {
+        if (chatNameWindow) chatNameWindow.classList.add('hidden');
+    });
+}
+// Close nickname modal when clicking on overlay outside the content
+if (chatNameWindow) {
+    chatNameWindow.addEventListener('click', (e) => {
+        if (e.target === chatNameWindow) {
+            chatNameWindow.classList.add('hidden');
+        }
+    });
+}
+if (chatNameInput) {
+    chatNameInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            chatNameSave?.click();
+        }
+    });
+}
 
 // ========= Stats system =========
 // Tracks gameplay statistics across sessions (persisted in localStorage)
@@ -179,7 +1397,8 @@ function loadStats() {
         totalScrapEarned: 0,
         sessionScrapEarned: 0,
         scrapSpent: 0,
-        highestScraps: 0,
+    highestScraps: 0,
+    peakTiles: 0,
         tiresSpawned: 0,
         tiresCollected: 0,
         tilesEarned: 0,
@@ -241,7 +1460,158 @@ window.addEventListener('beforeunload', () => {
     saveStats();
 });
 
+// -----------------------
+// Item Shop (client side)
+// -----------------------
+(function initItemShop(){
+    if (!itemshopBtn) return;
+    function openShop(){
+        if (!itemshopWindow) return;
+        itemshopWindow.classList.remove('hidden');
+        itemshopWindow.classList.add('active');
+        refreshShop();
+    }
+    function closeShop(){
+        if (!itemshopWindow) return;
+        itemshopWindow.classList.add('hidden');
+        itemshopWindow.classList.remove('active');
+    }
+    itemshopBtn.addEventListener('click', openShop);
+    itemshopBtn.addEventListener('mousedown', (e) => { e.preventDefault(); openShop(); });
+    itemshopBtn.addEventListener('touchstart', (e) => { try { e.preventDefault(); } catch {} openShop(); }, { passive: false });
+    // expose for external/fallback triggers
+    try { window.openItemShop = openShop; window.refreshItemShop = refreshShop; window.closeItemShop = closeShop; } catch {}
+    if (closeItemshop) closeItemshop.addEventListener('click', closeShop);
+    if (itemshopWindow) {
+        // click outside content to close
+        itemshopWindow.addEventListener('click', (e) => {
+            if (e.target === itemshopWindow) closeShop();
+        });
+    }
+
+    let countdownInterval = null;
+    function startCountdown(nextTs, serverTime){
+        if (!itemshopTimerEl) return;
+        if (countdownInterval) clearInterval(countdownInterval);
+        const offset = Date.now() - (serverTime || Date.now());
+        function tick(){
+            const now = Date.now() - offset;
+            let ms = Math.max(0, nextTs - now);
+            const h = Math.floor(ms / 3600000); ms -= h*3600000;
+            const m = Math.floor(ms / 60000); ms -= m*60000;
+            const s = Math.floor(ms / 1000);
+            if (itemshopTimerEl)
+                itemshopTimerEl.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+            if (h===0 && m===0 && s===0) {
+                clearInterval(countdownInterval);
+                refreshShop();
+            }
+        }
+        tick();
+        countdownInterval = setInterval(tick, 1000);
+    }
+
+    async function refreshShop(){
+        if (!itemshopGrid) return;
+        const proto = (location && location.protocol || '').toLowerCase();
+        if (proto === 'file:') {
+            itemshopGrid.innerHTML = '<div style="grid-column: 1/-1; color: #bbb;">Run server to use Item Shop.</div>';
+            return;
+        }
+        try {
+            const res = await fetch('/api/shop', { cache: 'no-cache' });
+            if (!res.ok) throw new Error('HTTP '+res.status);
+            const data = await res.json();
+            renderShop(Array.isArray(data.items) ? data.items : []);
+            if (data.nextRestock) startCountdown(data.nextRestock, data.serverTime);
+        } catch (e) {
+            itemshopGrid.innerHTML = `<div style="grid-column: 1/-1; color: #f66;">Shop error: ${e.message}</div>`;
+        }
+    }
+
+    function rarityClass(r){ return 'rarity-'+(r||'Common'); }
+    function renderShop(items){
+        if (!Array.isArray(items) || !items.length) {
+            itemshopGrid.innerHTML = '<div style="grid-column: 1/-1; color: #bbb;">No items.</div>';
+            return;
+        }
+        itemshopGrid.innerHTML = '';
+        for (const it of items) {
+            const card = document.createElement('div');
+            card.className = 'itemshop-card';
+            card.innerHTML = `
+                <div class="hint-badge" title="Info"></div>
+                <div class="itemshop-name">${it.name}</div>
+                <div class="itemshop-rarity ${rarityClass(it.rarity)}">${it.rarity}</div>
+                <div class="itemshop-price">Price: ${Number(it.price||0).toLocaleString()}</div>
+                <button class="itemshop-buy" data-slot="${it.slot}" ${it.stock<=0?'disabled':''}>Buy</button>
+            `;
+            // bind hint badge
+            const h = card.querySelector('.hint-badge');
+            if (h) h.addEventListener('click', () => openItemHint(it));
+            itemshopGrid.appendChild(card);
+        }
+        itemshopGrid.querySelectorAll('.itemshop-buy').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const el = e.currentTarget;
+                const slot = Number(el.getAttribute('data-slot'));
+                // Inventory capacity check
+                if (inventory.length >= INVENTORY_SLOTS) {
+                    alert('Your inventory is full (6/6). You cannot buy this item.');
+                    return;
+                }
+                el.disabled = true;
+                try {
+                    const res = await fetch('/api/shop/buy', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ slot })
+                    });
+                    const data = await res.json();
+                    if (!res.ok || !data || data.ok !== true) throw new Error((data && data.error) || 'Buy failed');
+                    // Add purchased item to inventory (non-stacking)
+                    if (data.item) {
+                        const ok = addToInventory(data.item);
+                        if (!ok) alert('Your inventory is full. Item not added.');
+                    }
+                    // Disable buy after successful purchase (single-stock per restock)
+                    el.disabled = true;
+                } catch (err) {
+                    alert('Purchase failed: '+(err.message||'Unknown'));
+                    el.disabled = false;
+                }
+            });
+        });
+    }
+})();
+
+// Fallback: ensure click always opens shop even if initializer ran earlier/later
+document.addEventListener('click', (e) => {
+    const t = e.target;
+    if (t && t.id === 'itemshop-btn') {
+        if (window.openItemShop) return window.openItemShop();
+        // minimal fallback: show window if present
+        const w = document.getElementById('itemshop-window');
+        if (w) { w.classList.remove('hidden'); w.classList.add('active'); }
+    }
+});
+
 // ========= Settings UI (created dynamically to avoid HTML edits) =========
+        // Inventory events
+        if (inventoryBtn) {
+            inventoryBtn.addEventListener('click', openInventory);
+            inventoryBtn.addEventListener('mousedown', (e) => { e.preventDefault(); openInventory(); });
+            inventoryBtn.addEventListener('touchstart', (e) => { try { e.preventDefault(); } catch {} openInventory(); }, { passive: false });
+        }
+        if (closeInventory) closeInventory.addEventListener('click', closeInventoryWindow);
+        if (inventoryWindow) inventoryWindow.addEventListener('click', (e) => { if (e.target === inventoryWindow) closeInventoryWindow(); });
+        if (closeItemhint) closeItemhint.addEventListener('click', closeItemHintWindow);
+        if (itemhintWindow) itemhintWindow.addEventListener('click', (e) => { if (e.target === itemhintWindow) closeItemHintWindow(); });
+    const reloadBtn = document.getElementById('reload-inventory');
+    if (reloadBtn) reloadBtn.addEventListener('click', () => { try { reloadInventoryFromServer(); } catch {} });
+
+        // Initialize inventory UI
+        updateInventoryUI();
 function ensureSettingsButton() {
     if (document.getElementById('settings-btn')) return;
     const container = document.createElement('div');
@@ -301,8 +1671,11 @@ function ensureSettingsWindow() {
             </div>
             <div class="settings-actions">
                 <button id="export-save-btn">Export Save</button>
+                <button id="export-simple-btn" title="Export only core game data as plain JSON">Export Simple JSON</button>
+                <button id="reset-save-btn">Reset Save</button>
                 <button id="import-save-btn">Import Save</button>
-                <input type="file" id="import-save-input" accept="application/json" class="hidden" />
+                <input type="file" id="import-save-input" accept="application/json" class="visually-hidden" />
+                <button id="paste-save-btn" title="Paste JSON from clipboard or manual">Paste JSON Save</button>
             </div>
             <img id="settings-palette" src="assets/pallet.png" alt="Palette">
             <div id="close-settings">✕</div>
@@ -386,6 +1759,14 @@ function collectSaveData() {
     return { type: 'localStorage', meta: { exportedAt: new Date().toISOString(), version: '1.2-patch1' }, payload: all };
 }
 function exportSave() {
+    try {
+        if (window.saveSystem && typeof window.saveSystem.exportSave === 'function') {
+            // Prefer native SaveSystem exporter for proper format
+            window.saveSystem.exportSave();
+            return;
+        }
+    } catch {}
+    // Fallback: export all localStorage keys
     const data = collectSaveData();
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
@@ -396,40 +1777,246 @@ function exportSave() {
     URL.revokeObjectURL(a.href);
     a.remove();
 }
-function applyImportedData(obj) {
-    if (obj && obj.type === 'custom' && obj.payload && typeof window.gameImportSave === 'function') {
-        try { window.gameImportSave(obj.payload); return true; } catch(e) {}
+// Export only the core game data (simple, human-readable JSON)
+function exportSimpleSave() {
+    let gameData = null;
+    try {
+        if (window.saveSystem && typeof window.saveSystem.getGameData === 'function') {
+            gameData = window.saveSystem.getGameData();
+        }
+    } catch {}
+    if (!gameData) {
+        // Fallback: try to read the core save key directly
+        try {
+            const key = (window.saveSystem && window.saveSystem.saveKey) ? window.saveSystem.saveKey : 'scrapMastersGameSave';
+            const raw = localStorage.getItem(key);
+            if (raw) {
+                try { gameData = JSON.parse(raw); } catch { gameData = { raw }; }
+            }
+        } catch {}
     }
+    if (!gameData) {
+        // Last resort minimal snapshot
+        gameData = {
+            saveVersion: 1,
+            scraps: (typeof window.scraps === 'number') ? window.scraps : 0,
+            upgradeLevels: (typeof window.upgradeLevels === 'object' && window.upgradeLevels) ? window.upgradeLevels : {},
+            rebirths: (typeof window.rebirthCount === 'number') ? window.rebirthCount : 0,
+            tiles: (typeof window.tiles === 'number') ? window.tiles : 0,
+        };
+    }
+    const blob = new Blob([JSON.stringify(gameData, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'scrapmasters-simple-save.json';
+    document.body.appendChild(a);
+    a.click();
+    URL.revokeObjectURL(a.href);
+    a.remove();
+}
+function applyImportedData(obj) {
+    try { console.debug('[Import] applyImportedData start. typeof:', typeof obj); } catch {}
+    // 1) If custom importer exposed, let it handle
+    if (obj && obj.type === 'custom' && obj.payload && typeof window.gameImportSave === 'function') {
+        try { console.debug('[Import] Detected custom payload, delegating to gameImportSave'); window.gameImportSave(obj.payload); return true; } catch(e) { try { console.debug('[Import] custom handler failed:', e); } catch {} }
+    }
+    // Accept stringified JSON or { data: {...} } wrappers
+    try {
+        if (typeof obj === 'string') { console.debug('[Import] String input, parsing JSON'); obj = JSON.parse(obj); }
+        if (obj && obj.data && typeof obj.data === 'object') { console.debug('[Import] Found data wrapper'); obj = obj.data; }
+    } catch {}
+    // 2) If this looks like a SaveSystem gameData (single object with fields), write to the core save key
+    const looksLikeGameData = (o) => o && typeof o === 'object' && (
+        ('scraps' in o && 'upgradeLevels' in o) || ('saveVersion' in o)
+    );
+    if (looksLikeGameData(obj)) {
+        try {
+            const key = (window.saveSystem && window.saveSystem.saveKey) ? window.saveSystem.saveKey : 'scrapMastersGameSave';
+            try { console.debug('[Import] Detected SaveSystem gameData. Writing to', key); } catch {}
+            localStorage.setItem(key, JSON.stringify(obj));
+            return true;
+        } catch {}
+    }
+    // 2b) If object looks like a full localStorage dump (has payload or explicit type), write ALL keys
+    try {
+        const looksLikeDump = (o) => !!(o && (o.type === 'localStorage' || (o.payload && typeof o.payload === 'object')));
+        if (looksLikeDump(obj)) {
+            const payload = obj.payload || {};
+            try { console.debug('[Import] Detected localStorage dump. Keys:', Object.keys(payload).length); } catch {}
+            if (!confirm('Import will overwrite your current save. Continue?')) return false;
+            Object.keys(payload).forEach(k => {
+                try {
+                    const v = payload[k];
+                    if (typeof v === 'string') localStorage.setItem(k, v);
+                    else localStorage.setItem(k, JSON.stringify(v));
+                } catch(e) {}
+            });
+            try { console.debug('[Import] LocalStorage dump written successfully'); } catch {}
+            return true;
+        }
+    } catch {}
+    // 3) Map that contains the core save key only
+    try {
+        const key = (window.saveSystem && window.saveSystem.saveKey) ? window.saveSystem.saveKey : 'scrapMastersGameSave';
+        if (obj && typeof obj === 'object' && obj[key] !== undefined) {
+            const val = obj[key];
+            try { console.debug('[Import] Map contains core key. Writing to', key, 'type:', typeof val); } catch {}
+            localStorage.setItem(key, typeof val === 'string' ? val : JSON.stringify(val));
+            return true;
+        }
+        if (obj && obj.payload && obj.payload[key] !== undefined) {
+            const val = obj.payload[key];
+            try { console.debug('[Import] Payload contains core key. Writing to', key, 'type:', typeof val); } catch {}
+            localStorage.setItem(key, typeof val === 'string' ? val : JSON.stringify(val));
+            return true;
+        }
+    } catch {}
+    // 4) Otherwise, treat as a plain map of keys to import
     const payload = obj && obj.payload ? obj.payload : obj;
     if (!payload || typeof payload !== 'object') return false;
+    try { console.debug('[Import] Treating input as plain key map. Keys:', Object.keys(payload).length); } catch {}
     if (!confirm('Import will overwrite your current save. Continue?')) return false;
-    Object.keys(payload).forEach(k => { try { localStorage.setItem(k, String(payload[k])); } catch(e) {} });
-    return true;
+    try {
+        Object.keys(payload).forEach(k => {
+            try {
+                const v = payload[k];
+                if (typeof v === 'string') localStorage.setItem(k, v);
+                else localStorage.setItem(k, JSON.stringify(v));
+            } catch(e) {}
+        });
+        try { console.debug('[Import] Key map written successfully'); } catch {}
+        return true;
+    } catch { return false; }
 }
 function bindSettingsHandlers() {
     const btn = document.getElementById('settings-btn');
     const win = document.getElementById('settings-window');
     const closeBtn = document.getElementById('close-settings');
     const exportBtn = document.getElementById('export-save-btn');
+    const exportSimpleBtn = document.getElementById('export-simple-btn');
+    const resetBtn = document.getElementById('reset-save-btn');
     const importBtn = document.getElementById('import-save-btn');
     const importInput = document.getElementById('import-save-input');
+    const pasteBtn = document.getElementById('paste-save-btn');
     if (btn) btn.addEventListener('click', openSettings);
     if (closeBtn) closeBtn.addEventListener('click', closeSettings);
     if (exportBtn) exportBtn.addEventListener('click', exportSave);
-    if (importBtn) importBtn.addEventListener('click', () => importInput && importInput.click());
+    if (exportSimpleBtn) exportSimpleBtn.addEventListener('click', exportSimpleSave);
+    if (resetBtn) resetBtn.addEventListener('click', () => {
+        if (!confirm('This will permanently reset ALL your progress (including local saves). Continue?')) return;
+        try { if (typeof window.resetsave === 'function') window.resetsave(); } catch {}
+        try { localStorage.clear(); } catch {}
+        try { sessionStorage.clear(); } catch {}
+        // Clear caches (if SW used) and force a hard reload with cache-busting
+        const reloadHard = () => {
+            const url = new URL(location.href);
+            url.searchParams.set('t', Date.now().toString());
+            location.replace(url.toString());
+        };
+        try {
+            if ('caches' in window) {
+                caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))).finally(reloadHard);
+            } else {
+                reloadHard();
+            }
+        } catch { reloadHard(); }
+    });
+    if (importBtn) importBtn.addEventListener('click', () => {
+        if (!importInput) return;
+        // Temporarily make the input effectively visible and clickable for strict browsers
+        const prev = {
+            position: importInput.style.position,
+            left: importInput.style.left,
+            top: importInput.style.top,
+            width: importInput.style.width,
+            height: importInput.style.height,
+            opacity: importInput.style.opacity,
+            pointerEvents: importInput.style.pointerEvents,
+            zIndex: importInput.style.zIndex,
+        };
+        importInput.classList.remove('hidden');
+        importInput.classList.remove('visually-hidden');
+        importInput.style.position = 'fixed';
+        importInput.style.left = '0';
+        importInput.style.top = '0';
+        importInput.style.width = '1px';
+        importInput.style.height = '1px';
+        importInput.style.opacity = '0';
+        importInput.style.pointerEvents = 'auto';
+        importInput.style.zIndex = '2147483647';
+        try { importInput.click(); } finally {
+            // Restore styles and re-hide
+            importInput.style.position = prev.position;
+            importInput.style.left = prev.left;
+            importInput.style.top = prev.top;
+            importInput.style.width = prev.width;
+            importInput.style.height = prev.height;
+            importInput.style.opacity = prev.opacity;
+            importInput.style.pointerEvents = prev.pointerEvents;
+            importInput.style.zIndex = prev.zIndex;
+            importInput.classList.add('visually-hidden');
+        }
+    });
     if (importInput) importInput.addEventListener('change', (e) => {
+        // Force localStorage overwrite import (bypass SaveSystem.importSave)
         const f = e.target.files && e.target.files[0];
         if (f) {
             const reader = new FileReader();
             reader.onload = () => {
                 try {
+                    try { console.debug('[Import] File selected:', f.name, f.size + ' bytes'); } catch {}
                     const data = JSON.parse(reader.result);
-                    if (applyImportedData(data)) { alert('Save imported. Reloading...'); location.reload(); }
-                } catch { alert('Invalid file. Could not parse JSON.'); }
+                    // Always try to apply by writing directly to localStorage (save key or full dump)
+                    const ok = applyImportedData(data);
+                    if (ok) {
+                        try { console.debug('[Import] Import OK. Reloading page...'); } catch {}
+                        try { localStorage.setItem('sm_skip_next_save', '1'); } catch {}
+                        // Patch out save on this page to avoid beforeunload overwrite even with older cached scripts
+                        try { if (window.saveSystem && typeof window.saveSystem.saveGame === 'function') { window.saveSystem.saveGame = function(){ try { console.debug('[Import] saveGame suppressed for reload'); } catch {}; return true; }; } } catch {}
+                        alert('Save imported. Reloading...');
+                        const url = new URL(location.href);
+                        url.searchParams.set('t', Date.now().toString());
+                        location.replace(url.toString());
+                    } else {
+                        alert('Import failed: unrecognized save format.');
+                    }
+                } catch {
+                    alert('Invalid file. Could not parse JSON.');
+                }
             };
             reader.readAsText(f);
         }
         e.target.value = '';
+    });
+    if (pasteBtn) pasteBtn.addEventListener('click', async () => {
+        try { console.debug('[Import] Paste flow initiated'); } catch {}
+        let text = '';
+        try {
+            if (navigator.clipboard && navigator.clipboard.readText) {
+                text = await navigator.clipboard.readText();
+            }
+        } catch {}
+        if (!text) {
+            text = prompt('Paste your JSON save here:');
+        }
+        if (!text) return;
+        try {
+            const data = JSON.parse(text);
+            const ok = applyImportedData(data);
+            if (ok) {
+                try { localStorage.setItem('sm_skip_next_save', '1'); } catch {}
+                // Patch out save on this page to avoid beforeunload overwrite even with older cached scripts
+                try { if (window.saveSystem && typeof window.saveSystem.saveGame === 'function') { window.saveSystem.saveGame = function(){ try { console.debug('[Import] saveGame suppressed for reload'); } catch {}; return true; }; } } catch {}
+                alert('Save imported. Reloading...');
+                const url = new URL(location.href);
+                url.searchParams.set('t', Date.now().toString());
+                location.replace(url.toString());
+            } else {
+                alert('Import failed: unrecognized save format.');
+            }
+        } catch (e) {
+            alert('Invalid JSON in pasted content.');
+        }
     });
     if (win) win.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSettings(); });
 }
@@ -446,7 +2033,7 @@ function updateRebirthUI() {
     if (rebirthCountDisplay) {
         rebirthCountDisplay.textContent = `Rebirth: ${rebirthCount}`;
     }
-    // Earth (chat) icon removed
+        // Earth (chat) icon removed - this line is a comment and does not affect functionality
     // Dynamiczny koszt w oknie rebirth jeśli element istnieje
     const costPlaceholder = document.getElementById('rebirth-cost-placeholder');
     if (costPlaceholder) {
@@ -466,6 +2053,8 @@ function updateRebirthUI() {
     const blueUnlocked = treeUpgrades && treeUpgrades[2] && treeUpgrades[2].level > 0;
         blueUpgradeContainer.classList.toggle('hidden', !blueUnlocked);
     }
+    // Update chat icon visibility based on rebirths
+    try { updateChatUnlockUI(); } catch {}
 }
 
 function updateGreenUpgradeUI() {
@@ -510,6 +2099,17 @@ function updateScrapyardSectionsVisibility() {
     const blueUnlocked = treeUpgrades && treeUpgrades[2] && treeUpgrades[2].level > 0; // index 2 now Blue Upgrades
         blueUpgradeContainer.classList.toggle('hidden', !blueUnlocked);
     }
+
+    // Itemshop button visible after 6 rebirths
+    if (itemshopBtn) {
+        if (rebirthCount >= 6) itemshopBtn.classList.remove('hidden');
+        else itemshopBtn.classList.add('hidden');
+    }
+    // Inventory button visible after 6 rebirths
+    if (inventoryBtn) {
+        if (rebirthCount >= 6) inventoryBtn.classList.remove('hidden');
+        else inventoryBtn.classList.add('hidden');
+    }
 }
 
 // Chat helpers removed
@@ -546,7 +2146,7 @@ function updateUpgradeInfo() {
     const costEl3 = document.getElementById('upgrade-cost-3');
     if (lvlEl3) lvlEl3.textContent = currentLevel3;
     if (costEl3) {
-        if (currentLevel3 < 40) {
+        if (currentLevel3 < upgrade4Costs.length) {
             const c = upgrade4Costs[currentLevel3] ?? Infinity;
             costEl3.textContent = isFinite(c) ? `${c} Scrap` : 'MAX';
         } else {
@@ -753,6 +2353,7 @@ function performRebirth() {
 
     rebirthCount++;
     if (STATS) { STATS.rebirths += 1; STATS.lastRebirthAt = Date.now(); }
+    try { requestSyncLeaderboard(); } catch {}
         if (rebirthCountDisplay) {
             rebirthCountDisplay.textContent = `Rebirth: ${rebirthCount}`;
         }
@@ -770,6 +2371,8 @@ function performRebirth() {
         updateGreenUpgradeUI();
         updateGreenUpgradeBarrelAvailability(); // Dodano aktualizację dostępności barrel
     updateScrapyardSectionsVisibility(); // Odśwież widoczność sekcji w Book
+        // Toggle itemshop visibility based on new rebirth count
+        if (itemshopBtn) itemshopBtn.classList.toggle('hidden', rebirthCount < 6);
         updateMysteryBookUI(); // Dodano aktualizację UI dla Mystery Book
         updateBrickUI(); // Dodano aktualizację UI dla Brick
         rebirthWindow.classList.remove('active');
@@ -904,7 +2507,7 @@ function buyUpgrade(index) {
         // Require cooldown level >= 5
         if ((upgradeLevels[2] || 0) < 5) return;
         const currentLevel = upgradeLevels[3] || 0;
-    if (currentLevel >= 20) return;
+        if (currentLevel >= upgrade4Costs.length) return; // cap at 10 levels
         const cost = upgrade4Costs[currentLevel] ?? Infinity;
         if (scraps >= cost) {
             if (STATS) { STATS.scrapSpent += cost; STATS.upgradesBought += 1; }
@@ -993,40 +2596,27 @@ let scrapBonusPercent = 0;
 // Better Upgrades: keep original max levels; customize first three costs
 // Costs for Better: [100, 120, 1000, ...rest as before]
 const blueBetterCosts = [
-    100,  // L1 (custom)
-    120,  // L2 (custom)
-    1000, // L3 (custom)
-    1000, 1400, 6000, 10000, 15000, 30000, 40000, 100000,
-    300000, 800000, 1000000, 3000000, 5000000
-]; // 16 levels total
+    50, 75, 150, 250, 400, 700, 1000, 2000, 4000, 7000, 12000, 20000, 35000, 55000, 80000, 120000
+]; // 16 levels total, all in Tires
 // New Blue Upgrade: The Earnings (adds flat +10 scrap per click per level)
 const blueEarningsCosts = [
-    2000,        // L1 (was 3000)
-    10000,      // L2 (was 15000)
-    30000,       // L3
-    45000,      // L4
-    90000,     // L5
-    560000,    // L6
-    8700000,    // L7
-    10000000,   // L8
-    150000000,  // L9
-    200000000   // L10
-];
+    500, 1200, 2500, 4000, 6500, 10000, 15000, 22000, 30000, 40000
+]; // all in Tires
 const blueUpgrades = {
     // Better: special total multipliers for the first three levels
     // L0=1.00, L1=1.30, L2=1.35, L3=1.45; from L4 use base increment 0.25 per level
     better: { level: 0, max: blueBetterCosts.length, multipliers: [1.00, 1.30, 1.35, 1.45], baseIncrement: 0.25 },
     // The Tires upgrade (now multi-level)
-    tires: { level: 0, max: 30, perLevelBonus: 100 },
-    earnings: { level: 0, max: 10, scrapPerLevel: 1000 }
+    tires: { level: 0, max: 30, perLevelBonus: 2 },
+    earnings: { level: 0, max: 10, scrapPerLevel: 10 }
 };
 // expose for UI readout
 window.blueUpgrades = blueUpgrades;
 // Costs for The Tires upgrade levels 1..30 (progressively large)
 const blueTiresCosts = [
-    1000, 7000, 14000, 24500, 35000, 52500, 70000, 105000, 140000, 210000,
-    305000, 420000, 560000, 700000, 910000, 1190000, 1540000, 1960000, 2450000, 3010000,
-    3640000, 4340000, 5250000, 6300000, 7350000, 8750000, 10500000, 12600000, 15050000, 17850000
+    200, 400, 800, 1200, 2000, 3000, 4500, 6500, 9000, 12500,
+    16500, 21000, 26000, 31500, 37500, 44000, 51000, 58500, 66500, 75000,
+    84000, 93500, 103500, 114000, 125000, 137000, 150000, 164000, 179000, 195000
 ];
 // Safety clamp in case save had higher level
 if (blueUpgrades.better.level > blueUpgrades.better.max) {
@@ -1063,7 +2653,14 @@ function calculateTotalScrap() {
     // Bazowy bonus z wybranej beczki (scrap=0, barrel1=1, itd.) + upgrady Mystery Book
     const baseBarrelBonus = scrapBonusPercent; // Teraz scrapBonusPercent to indeks (0,1,2,3,4,5) = bonus (0,1,2,3,4,5)
     const earningsFlat = (blueUpgrades.earnings ? blueUpgrades.earnings.level * blueUpgrades.earnings.scrapPerLevel : 0);
-    const additive = scrapPerClick + baseBarrelBonus + (barrelLevels.reduce((sum, level) => sum + level, 0)) + earningsFlat;
+    // If Sunny Day is active, treat the currently displayed barrel as max level for the sum
+    let sumBarrelLevels = barrelLevels.reduce((sum, level) => sum + level, 0);
+    if (typeof isSunnyDayActive === 'function' && isSunnyDayActive() && sunnyDayCurrentIndex != null) {
+        const curLevel = barrelLevels[sunnyDayCurrentIndex] || 0;
+        const extra = Math.max(0, (typeof barrelMaxLevel !== 'undefined' ? barrelMaxLevel : 5) - curLevel);
+        sumBarrelLevels += extra;
+    }
+    const additive = scrapPerClick + baseBarrelBonus + sumBarrelLevels + earningsFlat;
     let total = additive * getClickMultiplier();
     // Star Power tree upgrade: now multiplies final scrap per click by 1.10^rebirthCount when purchased
     const starPower = treeUpgrades.find(t => t.name === 'Star Power');
@@ -1110,7 +2707,7 @@ const barrelCosts = [1, 2, 4, 8, 16, 32, 64, 128, 256];
 const treeUpgrades = [
     {
         img: 'scrapyard.png', name: 'Better Scrapyard', desc: "Upgrade your Scrapyard from 100 Scrap per minute to 100 Scrap per second!",
-        rebirth: 6, price: 1000, scrapPrice: 1000, brickPrice: 5, level: 0, maxLevel: 1, requiresScrapyard: true
+        rebirth: 4, price: 500, scrapPrice: 500, brickPrice: 3, level: 0, maxLevel: 1, requiresScrapyard: true
     },
     {
         img: 'tires.png', name: 'Tires', desc: "Unlocks Tires currency! Every 60 seconds, 1 tire falls down giving +1 Tires when hovered!",
@@ -1118,31 +2715,31 @@ const treeUpgrades = [
     },
     { // SWAPPED: Blue Upgrades now index 2 (central chain)
         img: 'blueupgrade.png', name: 'Tires Upgrades', desc: "Unlocks Blue Upgrades menu where you spend Tires on permanent upgrades (persist through rebirth).",
-        rebirth: 14, scrapPrice: 2000000, brickPrice: 120, tilesPrice: 800, level: 0, maxLevel: 1
+        rebirth: 10, scrapPrice: 20000, brickPrice: 15, tilesPrice: 100, level: 0, maxLevel: 1
     },
     {
         img: 'goldscrapyard.png', name: 'Best Scrapyard', desc: "Upgrade your Scrapyard from 100 Scrap/s to 300 Scrap/s!",
-        rebirth: 12, scrapPrice: 80000, brickPrice: 30, tilesPrice: 500, level: 0, maxLevel: 1
+        rebirth: 8, scrapPrice: 25000, brickPrice: 12, tilesPrice: 120, level: 0, maxLevel: 1
     },
     { // SWAPPED: TiresYard now index 4 (right dashed branch)
         img: 'tilesyard.png', name: 'TiresYard', desc: "Unlocks TiresYard in the Book as the 3rd option.",
-        rebirth: 10, price: 120, scrapPrice: 15000, tilesPrice: 25, level: 0, maxLevel: 1, requiresTwoUpgrades: true
+        rebirth: 6, price: 60, scrapPrice: 8000, tilesPrice: 20, level: 0, maxLevel: 1, requiresTwoUpgrades: true
     },
     {
         img: 'Cloud.png', name: 'Storm', desc: 'Every 4 minutes a giant cloud drops 30 Tires across the screen.',
-        rebirth: 16, price: 100, scrapPrice: 300000, tilesPrice: 500, level: 0, maxLevel: 1
+        rebirth: 12, price: 50, scrapPrice: 40000, tilesPrice: 150, level: 0, maxLevel: 1
     },
     {
         img: 'brickyard.png', name: 'Brick Storm', desc: '3.5% chance that a Storm becomes a BrickStorm: falling Bricks instead of Tires. Each collected Brick grants +1 Brick.',
-        rebirth: 0, price: 0, brickPrice: 100, scrapPrice: 2000000, level: 0, maxLevel: 1
+        rebirth: 12, price: 0, brickPrice: 50, scrapPrice: 50000, level: 0, maxLevel: 1
     },
     {
     img: 'star.png', name: 'Star Power', desc: 'Each Rebirth gives +10% Scrap gain (multiplicative).',
-        rebirth: 0, price: 0, scrapPrice: 0, brickPrice: 0, tilesPrice: 0, level: 0, maxLevel: 1
+        rebirth: 0, price: 300, scrapPrice: 10000000, brickPrice: 0, tilesPrice: 1400, level: 0, maxLevel: 1
     },
     {
         img: 'master.png', name: 'Master Tokens Storm', desc: '3.5% chance Storm becomes a Master Token Storm. Each collected token grants +10 Master Tokens.',
-        rebirth: 0, price: 0, scrapPrice: 0, brickPrice: 0, tilesPrice: 0, level: 0, maxLevel: 1
+        rebirth: 0, price: 60, scrapPrice: 0, brickPrice: 0, tilesPrice: 0, level: 0, maxLevel: 1
     },
 ];
 
@@ -1187,14 +2784,22 @@ function spawnStormCloud() {
     const brickStormUnlocked = treeUpgrades && treeUpgrades[6] && treeUpgrades[6].level > 0;
     const starPowerUnlocked = treeUpgrades && treeUpgrades[7] && treeUpgrades[7].level > 0; // not used here, just example
     const masterStormUnlocked = treeUpgrades && treeUpgrades[8] && treeUpgrades[8].level > 0;
-    // Determine storm variant priority: Master Tokens Storm > Brick Storm > normal
+    // Determine storm variant using disjoint ranges so both can appear across storms
+    // When both are unlocked: 3.5% Master, next 3.5% Brick (total 7%)
+    // When only one unlocked: that one gets 3.5%
     const roll = Math.random();
     let isMasterStorm = false;
     let isBrickStorm = false;
-    if (masterStormUnlocked && roll < 0.035) {
-        isMasterStorm = true;
-    } else if (!isMasterStorm && brickStormUnlocked && roll < 0.035) {
-        isBrickStorm = true;
+    if (masterStormUnlocked && brickStormUnlocked) {
+        if (roll < 0.035) {
+            isMasterStorm = true;
+        } else if (roll < 0.07) {
+            isBrickStorm = true;
+        }
+    } else if (masterStormUnlocked) {
+        if (roll < 0.035) isMasterStorm = true;
+    } else if (brickStormUnlocked) {
+        if (roll < 0.035) isBrickStorm = true;
     }
     for (let i = 0; i < STORM_DROP_COUNT; i++) {
         setTimeout(() => {
@@ -1223,19 +2828,25 @@ function createFallingBrick() {
     el.src = 'assets/brick.png';
     el.style.cssText = `
         position: fixed;
-        width: 56px; height: 56px;
+        width: 64px; height: 64px; /* +~15% size */
         z-index: 999;
         pointer-events: auto; cursor: pointer;
-        top: -70px; left: ${Math.random() * (window.innerWidth - 56)}px;
+        top: -80px; left: ${Math.random() * (window.innerWidth - 64)}px;
         animation: fallDown 3s linear; transition: transform 0.1s;
     `;
-    el.addEventListener('mouseenter', () => {
-        bricks += 1;
+    let handled = false;
+    const collect = () => {
+        if (handled) return; handled = true;
+        const mult = (typeof getDropMultiplier === 'function') ? getDropMultiplier() : 1;
+        bricks += (1 * mult);
         updateBrickUI();
         el.style.transform = 'scale(1.15)';
         setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 100);
         if (typeof saveSystem !== 'undefined') saveSystem.saveGame();
-    });
+    };
+    el.addEventListener('mouseenter', collect);
+    el.addEventListener('click', collect);
+    el.addEventListener('touchstart', (e) => { try { e.preventDefault(); } catch {} collect(); }, { passive: false });
     el.addEventListener('mouseleave', () => { el.style.transform = 'scale(1.0)'; });
     if (!document.getElementById('tire-animation')) {
         const style = document.createElement('style');
@@ -1251,10 +2862,11 @@ function createFallingBrick() {
 function createFallingMasterToken() {
     const el = document.createElement('div');
     el.className = 'falling-master-token';
-    el.style.left = Math.random() * (window.innerWidth - 40) + 'px';
+    el.style.left = Math.random() * (window.innerWidth - 48) + 'px';
     const speed = 4 + Math.random() * 3;
-    let y = -40;
-    el.innerHTML = '<img src="assets/master.png" alt="Master Token" style="width:32px;height:32px;image-rendering:pixelated;" />';
+    let y = -48;
+    // 20% larger inner icon
+    el.innerHTML = '<img src="assets/master.png" alt="Master Token" style="width:38px;height:38px;image-rendering:pixelated;" />';
     document.body.appendChild(el);
     function step() {
         y += speed;
@@ -1265,12 +2877,19 @@ function createFallingMasterToken() {
         }
         requestAnimationFrame(step);
     }
-    el.addEventListener('click', () => {
-        masterTokens += 10; // +10 Master Tokens per collected
-        if (STATS) STATS.masterTokensCollected = (STATS.masterTokensCollected||0) + 10;
+    // Collect on hover (mouseenter) and also on click/touch for mobile
+    const collect = () => {
+        const dropMult = (typeof getDropMultiplier === 'function') ? getDropMultiplier() : 1;
+        const tokenMult = (typeof getMasterTokenMultiplier === 'function') ? getMasterTokenMultiplier() : 1;
+        const gain = 10 * dropMult * tokenMult; // base +10 per token, modified by active boosts (non-stacking due to single-item rule)
+        masterTokens += gain;
+        if (STATS) STATS.masterTokensCollected = (STATS.masterTokensCollected||0) + gain;
         updateMasterTokenUI && updateMasterTokenUI();
         el.remove();
-    });
+    };
+    el.addEventListener('mouseenter', collect);
+    el.addEventListener('click', collect);
+    el.addEventListener('touchstart', (e) => { e.preventDefault(); collect(); }, { passive: false });
     requestAnimationFrame(step);
 }
 
@@ -1330,29 +2949,38 @@ function createFallingTire() {
     tire.src = 'assets/tires.png';
     tire.style.cssText = `
         position: fixed;
-        width: 60px;
-        height: 60px;
+        width: 69px; /* +15% */
+        height: 69px; /* +15% */
         z-index: 999;
         pointer-events: auto;
         cursor: pointer;
-        top: -70px;
-        left: ${Math.random() * (window.innerWidth - 60)}px;
+        top: -80px;
+        left: ${Math.random() * (window.innerWidth - 69)}px;
         animation: fallDown 3s linear;
         transition: transform 0.1s;
     `;
     
-    // Add hover handler for +Tiles (zbierasz po nakierowaniu kursora)
-    tire.addEventListener('mouseenter', () => {
+    // Add hover/touch/click handler for +Tiles (zbierasz po nakierowaniu kursora lub tapnięciu)
+    let handled = false;
+    const collect = () => {
+        if (handled) return; handled = true;
         // Tiles gained per tire is Level + 1 (so Level 0 -> 1 Tiles, Level 4 -> 5 Tiles)
         let tilesPerPickup = (typeof tilesLevel !== 'undefined') ? (tilesLevel + 1) : 1;
         if (blueUpgrades.tires && blueUpgrades.tires.level >= 1) {
-            tilesPerPickup *= (blueUpgrades.tires.perLevelBonus * blueUpgrades.tires.level); // 100 * level
+            tilesPerPickup += (blueUpgrades.tires.perLevelBonus * blueUpgrades.tires.level); // +2 per level
         }
-        tiles += tilesPerPickup;
-        if (STATS) { STATS.tiresCollected += 1; STATS.tilesEarned += tilesPerPickup; }
+        const mult = (typeof getDropMultiplier === 'function') ? getDropMultiplier() : 1;
+        const gainTiles = tilesPerPickup * mult;
+        tiles += gainTiles;
+        if (STATS) {
+            STATS.tiresCollected += 1;
+            STATS.tilesEarned += gainTiles;
+            STATS.peakTiles = Math.max(STATS.peakTiles || 0, tiles);
+        }
+        try { updatePeaksAfterTilesChange(); requestSyncLeaderboard(); } catch {}
         tires += 1; // Keep track of total tires collected
         updateTilesUI();
-    console.log(`🛞 Tire hovered! +${tilesPerPickup} Tires! Total tires currency: ${tiles}, Tires collected: ${tires}`);
+    console.log(`🛞 Tire hovered! +${gainTiles} Tires! Total tires currency: ${tiles}, Tires collected: ${tires}`);
         
         // Visual feedback
         tire.style.transform = 'scale(1.2)';
@@ -1366,7 +2994,10 @@ function createFallingTire() {
         if (typeof saveSystem !== 'undefined') {
             saveSystem.saveGame();
         }
-    });
+    };
+    tire.addEventListener('mouseenter', collect);
+    tire.addEventListener('click', collect);
+    tire.addEventListener('touchstart', (e) => { try { e.preventDefault(); } catch {} collect(); }, { passive: false });
     
     // Add additional hover effect for visual feedback
     tire.addEventListener('mouseleave', () => {
@@ -1379,8 +3010,8 @@ function createFallingTire() {
         style.id = 'tire-animation';
         style.textContent = `
             @keyframes fallDown {
-                from { top: -70px; transform: rotate(0deg); }
-                to { top: ${window.innerHeight + 70}px; transform: rotate(720deg); }
+                from { top: -80px; transform: rotate(0deg); }
+                to { top: ${window.innerHeight + 80}px; transform: rotate(720deg); }
             }
         `;
         document.head.appendChild(style);
@@ -1423,10 +3054,10 @@ function updateTilesUI() {
         }
     }
 
-    // TilesYard purchase gating by tree upgrade #3 (index 2)
-    const tilesYardUnlocked = treeUpgrades && treeUpgrades[2] && treeUpgrades[2].level > 0;
+    // TilesYard purchase gating by TiresYard tree upgrade (index 4)
+    const tilesYardUnlocked = treeUpgrades && treeUpgrades[4] && treeUpgrades[4].level > 0;
     if (tilesyardStatus && !tilesYardUnlocked) {
-        tilesyardStatus.textContent = 'Locked: Buy TiresYard (Tree Upgrade 3)';
+        tilesyardStatus.textContent = 'Locked: Buy TiresYard in Tree';
     } else if (tilesyardStatus && tilesYardUnlocked) {
         const cost = getTilesTierCost();
         tilesyardStatus.textContent = `Cost: ${cost} Tires`;
@@ -1438,7 +3069,7 @@ function updateTilesUI() {
         if (!tilesYardUnlocked) {
             tilesUpgradeBtn.disabled = true;
             tilesUpgradeBtn.textContent = 'Locked';
-            tilesUpgradeBtn.title = 'Unlock via Tree Upgrade 3';
+            tilesUpgradeBtn.title = 'Unlock via TiresYard in Tree';
         } else {
             const cost = getTilesTierCost();
             const canUpgrade = (tilesTier < tilesTierMax) && (tiles >= cost);
@@ -1624,25 +3255,29 @@ function updateTreeInfoWindow(index) {
     } else if (index === 1) { // Tires
         requirementText += `, Better Scrapyard, ${upg.brickPrice} Brick, ${upg.scrapPrice} Scrap, ${upg.price} Master Tokens`;
         canAfford = treeUpgrades[0].level >= 1 && bricks >= upg.brickPrice && scraps >= upg.scrapPrice && masterTokens >= upg.price;
-    } else if (index === 2 && upg.requiresTwoUpgrades) { // TilesYard upgrade: now requires Tires (index 1)
+    } else if (index === 2) { // Blue Upgrades unlock (requires Tires)
         const tiresOwned = treeUpgrades[1].level >= 1;
-        requirementText += `, Tires Upgrade, ${upg.scrapPrice} Scrap, ${upg.tilesPrice} Tires, ${upg.price} Master Tokens`;
-        canAfford = tiresOwned && scraps >= upg.scrapPrice && tiles >= upg.tilesPrice && masterTokens >= upg.price;
+        requirementText += `, Tires Upgrade, ${upg.brickPrice} Brick, ${upg.scrapPrice} Scrap, ${upg.tilesPrice} Tires`;
+        canAfford = tiresOwned && bricks >= (upg.brickPrice||0) && scraps >= upg.scrapPrice && tiles >= upg.tilesPrice;
     } else if (index === 3) { // Best Scrapyard - multi-currency cost (index 3 now)
         requirementText += `, ${upg.brickPrice} Brick, ${upg.scrapPrice} Scrap, ${upg.tilesPrice} Tires`;
         canAfford = bricks >= upg.brickPrice && scraps >= upg.scrapPrice && tiles >= upg.tilesPrice;
-    } else if (index === 4) { // Tires Upgrades - multi-currency cost (index 4 now)
-        requirementText += `, ${upg.brickPrice} Brick, ${upg.scrapPrice} Scrap, ${upg.tilesPrice} Tires`;
-        canAfford = bricks >= upg.brickPrice && scraps >= upg.scrapPrice && tiles >= upg.tilesPrice;
+    } else if (index === 4) { // TiresYard unlock (requires Tires)
+        const tiresOwned = treeUpgrades[1].level >= 1;
+        requirementText += `, Tires Upgrade, ${upg.scrapPrice} Scrap, ${upg.tilesPrice} Tires, ${upg.price} Master Tokens`;
+        canAfford = tiresOwned && scraps >= upg.scrapPrice && tiles >= upg.tilesPrice && masterTokens >= (upg.price||0);
     } else if (upg.name === 'Storm') {
         requirementText += `, ${upg.scrapPrice} Scrap, ${upg.tilesPrice} Tires, ${upg.price} Master Tokens`;
         canAfford = scraps >= upg.scrapPrice && tiles >= upg.tilesPrice && masterTokens >= upg.price;
     } else if (upg.name === 'Brick Storm') {
         requirementText += `, requires Storm, ${upg.brickPrice} Brick, ${upg.scrapPrice.toLocaleString()} Scrap`;
         canAfford = (treeUpgrades[5] && treeUpgrades[5].level > 0) && bricks >= (upg.brickPrice||0) && scraps >= (upg.scrapPrice||0);
+    } else if (upg.name === 'Master Tokens Storm') {
+        requirementText += `, requires Storm, ${upg.price} Master Tokens`;
+        canAfford = (treeUpgrades[5] && treeUpgrades[5].level > 0) && masterTokens >= upg.price;
     } else if (upg.name === 'Star Power') {
-        requirementText += `, requires Storm & Brick Storm (free)`;
-        canAfford = (treeUpgrades[5] && treeUpgrades[5].level > 0) && (treeUpgrades[6] && treeUpgrades[6].level > 0);
+        requirementText += `, requires Brick Storm & Master Tokens Storm, ${upg.scrapPrice.toLocaleString()} Scrap, ${upg.tilesPrice} Tires, ${upg.price} Master Tokens`;
+        canAfford = (treeUpgrades[6] && treeUpgrades[6].level > 0) && (treeUpgrades[8] && treeUpgrades[8].level > 0) && scraps >= (upg.scrapPrice||0) && tiles >= (upg.tilesPrice||0) && masterTokens >= upg.price;
     } else {
         requirementText += `, ${upg.price} Master Tokens`;
         canAfford = masterTokens >= upg.price;
@@ -1677,37 +3312,31 @@ function updateTreeInfoWindow(index) {
             treeInfoBuyBtn.disabled = true;
             treeInfoBuyBtn.setAttribute('data-state', 'bought');
             treeInfoBuyBtn.classList.remove('hidden');
-        } else if (rebirthCount >= upg.rebirth && allPaths) {
+    } else if (rebirthCount >= upg.rebirth && allPaths) {
             // Dostępny do kupna
             treeInfoBuyBtn.removeAttribute('data-state');
             if (index === 0) {
                 treeInfoBuyBtn.textContent = `Buy for ${upg.brickPrice} Brick + ${upg.scrapPrice} Scrap`;
             } else if (index === 1) {
                 treeInfoBuyBtn.textContent = `Buy for ${upg.brickPrice} Brick + ${upg.scrapPrice} Scrap + ${upg.price} Master Tokens`;
-            } else if (index === 2 && upg.requiresTwoUpgrades) {
-                treeInfoBuyBtn.textContent = `Buy for ${upg.scrapPrice} Scrap + ${upg.tilesPrice} Tires + ${upg.price} Master Tokens`;
+            } else if (index === 2) {
+                treeInfoBuyBtn.textContent = `Buy for ${upg.brickPrice} Brick + ${upg.scrapPrice} Scrap + ${upg.tilesPrice} Tires`;
             } else if (index === 3) {
                 treeInfoBuyBtn.textContent = `Buy for ${upg.brickPrice} Brick + ${upg.scrapPrice} Scrap + ${upg.tilesPrice} Tires`;
             } else if (index === 4) {
-                treeInfoBuyBtn.textContent = `Buy for ${upg.brickPrice} Brick + ${upg.scrapPrice} Scrap + ${upg.tilesPrice} Tires`;
-                // Make clickable; handleTreeUpgrade will validate and show precise alerts
-                const missingBrick = Math.max(0, upg.brickPrice - (bricks || 0));
-                const missingScrap = Math.max(0, upg.scrapPrice - (scraps || 0));
-                const missingTires = Math.max(0, upg.tilesPrice - (tiles || 0));
-                const missingText = (missingBrick || missingScrap || missingTires)
-                    ? `Missing: ${missingBrick} Brick, ${missingScrap} Scrap, ${missingTires} Tires`
-                    : '';
-                treeInfoBuyBtn.disabled = false;
-                if (missingText) treeInfoBuyBtn.title = missingText; else treeInfoBuyBtn.removeAttribute('title');
+                treeInfoBuyBtn.textContent = `Buy for ${upg.scrapPrice} Scrap + ${upg.tilesPrice} Tires + ${upg.price} Master Tokens`;
             } else if (upg.name === 'Storm') {
                 treeInfoBuyBtn.textContent = `Buy for ${upg.scrapPrice} Scrap + ${upg.tilesPrice} Tires + ${upg.price} Master Tokens`;
             } else if (upg.name === 'Brick Storm') {
                 treeInfoBuyBtn.textContent = `Buy for ${upg.brickPrice} Brick + ${upg.scrapPrice.toLocaleString()} Scrap`;
+            } else if (upg.name === 'Master Tokens Storm') {
+                treeInfoBuyBtn.textContent = `Buy for ${upg.price} Master Tokens`;
+            } else if (upg.name === 'Star Power') {
+                treeInfoBuyBtn.textContent = `Buy for ${upg.scrapPrice.toLocaleString()} Scrap + ${upg.tilesPrice} Tires + ${upg.price} Master Tokens`;
             } else {
                 treeInfoBuyBtn.textContent = `Buy for ${upg.price} Master Tokens`;
             }
-            // Allow click, but show disabled if cannot afford (except special case index===4 handled above)
-            if (index !== 4) treeInfoBuyBtn.disabled = !canAfford; else treeInfoBuyBtn.disabled = false;
+            treeInfoBuyBtn.disabled = !canAfford;
             treeInfoBuyBtn.classList.remove('hidden');
         } else {
             // Zablokowany (rebirth/paths) – nadal pokaż przycisk i pozwól kliknąć, handler pokaże komunikat
@@ -1716,16 +3345,20 @@ function updateTreeInfoWindow(index) {
                 treeInfoBuyBtn.textContent = `Buy for ${upg.brickPrice} Brick + ${upg.scrapPrice} Scrap`;
             } else if (index === 1) {
                 treeInfoBuyBtn.textContent = `Buy for ${upg.brickPrice} Brick + ${upg.scrapPrice} Scrap + ${upg.price} Master Tokens`;
-            } else if (index === 2 && upg.requiresTwoUpgrades) {
-                treeInfoBuyBtn.textContent = `Buy for ${upg.scrapPrice} Scrap + ${upg.tilesPrice} Tires + ${upg.price} Master Tokens`;
+            } else if (index === 2) {
+                treeInfoBuyBtn.textContent = `Buy for ${upg.brickPrice} Brick + ${upg.scrapPrice} Scrap + ${upg.tilesPrice} Tires`;
             } else if (index === 3) {
                 treeInfoBuyBtn.textContent = `Buy for ${upg.brickPrice} Brick + ${upg.scrapPrice} Scrap + ${upg.tilesPrice} Tires`;
             } else if (index === 4) {
-                treeInfoBuyBtn.textContent = `Buy for ${upg.brickPrice} Brick + ${upg.scrapPrice} Scrap + ${upg.tilesPrice} Tires`;
+                treeInfoBuyBtn.textContent = `Buy for ${upg.scrapPrice} Scrap + ${upg.tilesPrice} Tires + ${upg.price} Master Tokens`;
             } else if (upg.name === 'Storm') {
                 treeInfoBuyBtn.textContent = `Buy for ${upg.scrapPrice} Scrap + ${upg.tilesPrice} Tires + ${upg.price} Master Tokens`;
             } else if (upg.name === 'Brick Storm') {
                 treeInfoBuyBtn.textContent = `Buy for ${upg.brickPrice} Brick + ${upg.scrapPrice.toLocaleString()} Scrap`;
+            } else if (upg.name === 'Master Tokens Storm') {
+                treeInfoBuyBtn.textContent = `Buy for ${upg.price} Master Tokens`;
+            } else if (upg.name === 'Star Power') {
+                treeInfoBuyBtn.textContent = `Buy for ${upg.scrapPrice.toLocaleString()} Scrap + ${upg.tilesPrice} Tires + ${upg.price} Master Tokens`;
             } else {
                 treeInfoBuyBtn.textContent = `Buy for ${upg.price} Master Tokens`;
             }
@@ -1816,47 +3449,34 @@ function handleTreeUpgrade(index) {
         } else {
             alert('This upgrade is already purchased!');
         }
-    } else if (index === 2 && upg.requiresTwoUpgrades) { // TiresYard upgrade now requires Tires upgrade only
+    } else if (index === 2) { // Blue Upgrades unlock
         const tiresOwned = treeUpgrades[1].level >= 1;
-        if (rebirthCount >= upg.rebirth && 
-            tiresOwned && 
-            scraps >= upg.scrapPrice &&
-            tiles >= upg.tilesPrice &&
-            masterTokens >= upg.price && 
-            upg.level < upg.maxLevel) {
-            
-            // Handle upgrade - deduct Scrap, Tiles and Master Tokens
-            if (STATS) { STATS.scrapSpent += upg.scrapPrice; STATS.masterTokensSpent += upg.price; STATS.tilesSpent = (STATS.tilesSpent||0) + upg.tilesPrice; }
+        if (rebirthCount >= upg.rebirth && tiresOwned && bricks >= (upg.brickPrice||0) && scraps >= upg.scrapPrice && tiles >= upg.tilesPrice && upg.level < upg.maxLevel) {
+            if (STATS) { STATS.scrapSpent += upg.scrapPrice; STATS.tilesSpent = (STATS.tilesSpent||0) + upg.tilesPrice; }
+            bricks -= (upg.brickPrice||0);
             scraps -= upg.scrapPrice;
             tiles -= upg.tilesPrice;
-            masterTokens -= upg.price;
             upg.level++;
 
-            // Reveal TilesYard in UI
-            if (tilesyardSection) tilesyardSection.classList.remove('hidden');
-            if (tilesyardSeparator) tilesyardSeparator.classList.remove('hidden');
-            if (tilesyardStatus) tilesyardStatus.textContent = 'Unlocked';
+            // Unlock Blue Upgrades UI
+            if (blueUpgradeContainer) blueUpgradeContainer.classList.remove('hidden');
 
-            // UI updates
             treeInfoBuyBtn.classList.add('hidden');
-            updateMasterTokenUI();
+            updateBrickUI();
             updateTilesUI();
             if (counter) updateScrapCounter();
-            if (typeof updateScrapyardSectionsVisibility === 'function') updateScrapyardSectionsVisibility();
-            // Refresh TilesYard gating status text explicitly
-            updateTilesUI();
-
-            console.log('🧱 TilesYard unlocked via Tree Upgrade 3!');
+            updateTreeUI();
+            console.log('🔵 Blue Upgrades unlocked!');
         } else if (rebirthCount < upg.rebirth) {
             alert('You need at least ' + upg.rebirth + ' rebirths to unlock this upgrade!');
         } else if (!tiresOwned) {
             alert('You need the Tires upgrade first!');
+        } else if (bricks < (upg.brickPrice||0)) {
+            alert('You don\'t have enough Bricks! Need: ' + (upg.brickPrice||0));
         } else if (scraps < upg.scrapPrice) {
             alert('You don\'t have enough Scrap! Need: ' + upg.scrapPrice);
         } else if (tiles < upg.tilesPrice) {
             alert('You don\'t have enough Tires! Need: ' + upg.tilesPrice);
-        } else if (masterTokens < upg.price) {
-            alert('You don\'t have enough Master Tokens! Need: ' + upg.price);
         } else {
             alert('This upgrade is already purchased!');
         }
@@ -1894,32 +3514,37 @@ function handleTreeUpgrade(index) {
         } else {
             alert('This upgrade is already purchased!');
         }
-    } else if (index === 4) { // Tires Upgrades
-        if (rebirthCount >= upg.rebirth && bricks >= upg.brickPrice && scraps >= upg.scrapPrice && tiles >= upg.tilesPrice && upg.level < upg.maxLevel) {
-            // Deduct currencies
-            bricks -= upg.brickPrice;
-            if (STATS) { STATS.scrapSpent += upg.scrapPrice; STATS.tilesSpent = (STATS.tilesSpent||0) + upg.tilesPrice; }
+    } else if (index === 4) { // TiresYard unlock
+        const tiresOwned = treeUpgrades[1].level >= 1;
+        if (rebirthCount >= upg.rebirth && tiresOwned && scraps >= upg.scrapPrice && tiles >= upg.tilesPrice && masterTokens >= (upg.price||0) && upg.level < upg.maxLevel) {
+            if (STATS) { STATS.scrapSpent += upg.scrapPrice; STATS.tilesSpent = (STATS.tilesSpent||0) + upg.tilesPrice; STATS.masterTokensSpent += (upg.price||0); }
             scraps -= upg.scrapPrice;
             tiles -= upg.tilesPrice;
+            masterTokens -= (upg.price||0);
             upg.level++;
 
-            // Unlock Blue Upgrades UI
-            if (blueUpgradeContainer) blueUpgradeContainer.classList.remove('hidden');
+            // Reveal TilesYard in UI
+            if (tilesyardSection) tilesyardSection.classList.remove('hidden');
+            if (tilesyardSeparator) tilesyardSeparator.classList.remove('hidden');
+            if (tilesyardStatus) tilesyardStatus.textContent = 'Unlocked';
 
-            // UI updates
             treeInfoBuyBtn.classList.add('hidden');
-            updateBrickUI();
+            updateMasterTokenUI();
             updateTilesUI();
             if (counter) updateScrapCounter();
-            updateTreeUI();
+            if (typeof updateScrapyardSectionsVisibility === 'function') updateScrapyardSectionsVisibility();
+            updateTilesUI();
+            console.log('🏁 TiresYard unlocked!');
         } else if (rebirthCount < upg.rebirth) {
             alert('You need at least ' + upg.rebirth + ' rebirths to unlock this upgrade!');
-        } else if (bricks < upg.brickPrice) {
-            alert('You don\'t have enough Bricks! Need: ' + upg.brickPrice);
+        } else if (!tiresOwned) {
+            alert('You need the Tires upgrade first!');
         } else if (scraps < upg.scrapPrice) {
             alert('You don\'t have enough Scrap! Need: ' + upg.scrapPrice);
         } else if (tiles < upg.tilesPrice) {
             alert('You don\'t have enough Tires! Need: ' + upg.tilesPrice);
+        } else if (masterTokens < (upg.price||0)) {
+            alert('You don\'t have enough Master Tokens! Need: ' + (upg.price||0));
         } else {
             alert('This upgrade is already purchased!');
         }
@@ -1970,17 +3595,46 @@ function handleTreeUpgrade(index) {
             updateTreeUI();
             console.log('🧱 Brick Storm purchased! 3.5% chance for BrickStorm activated.');
         }
-    } else if (upg.name === 'Star Power') {
-        // Free upgrade, requires both Storm and Brick Storm
+    } else if (upg.name === 'Master Tokens Storm') {
+        // Requires Storm and costs Master Tokens
         if (!(treeUpgrades[5] && treeUpgrades[5].level > 0)) {
             alert('You need to purchase Storm first!');
-        } else if (!(treeUpgrades[6] && treeUpgrades[6].level > 0)) {
-            alert('You need to purchase Brick Storm first!');
         } else if (upg.level >= upg.maxLevel) {
             alert('This upgrade is already purchased!');
+        } else if ((masterTokens || 0) < (upg.price || 0)) {
+            alert('You don\'t have enough Master Tokens! Need: ' + (upg.price || 0));
         } else {
+            masterTokens -= (upg.price || 0);
             upg.level++;
             treeInfoBuyBtn.classList.add('hidden');
+            updateMasterTokenUI();
+            updateTreeUI();
+            console.log('💠 Master Tokens Storm purchased! 3.5% chance for Token Storm activated.');
+        }
+    } else if (upg.name === 'Star Power') {
+        // Requires Brick Storm & Master Tokens Storm and costs Scrap + Tires + MT
+        if (!(treeUpgrades[6] && treeUpgrades[6].level > 0)) {
+            alert('You need to purchase Brick Storm first!');
+        } else if (!(treeUpgrades[8] && treeUpgrades[8].level > 0)) {
+            alert('You need to purchase Master Tokens Storm first!');
+        } else if (upg.level >= upg.maxLevel) {
+            alert('This upgrade is already purchased!');
+        } else if ((scraps || 0) < (upg.scrapPrice || 0)) {
+            alert('You don\'t have enough Scrap! Need: ' + (upg.scrapPrice || 0).toLocaleString());
+        } else if ((tiles || 0) < (upg.tilesPrice || 0)) {
+            alert('You don\'t have enough Tires! Need: ' + (upg.tilesPrice || 0));
+        } else if ((masterTokens || 0) < (upg.price || 0)) {
+            alert('You don\'t have enough Master Tokens! Need: ' + (upg.price || 0));
+        } else {
+            if (STATS) { STATS.scrapSpent += (upg.scrapPrice || 0); STATS.tilesSpent = (STATS.tilesSpent||0) + (upg.tilesPrice || 0); STATS.masterTokensSpent += (upg.price || 0); }
+            scraps -= (upg.scrapPrice || 0);
+            tiles -= (upg.tilesPrice || 0);
+            masterTokens -= (upg.price || 0);
+            upg.level++;
+            treeInfoBuyBtn.classList.add('hidden');
+            updateMasterTokenUI();
+            updateTilesUI();
+            if (counter) updateScrapCounter();
             updateTreeUI();
             console.log('⭐ Star Power acquired! 1.10^rebirth (~+10% per rebirth) Scrap multiplier active.');
         }
@@ -2065,16 +3719,26 @@ scrapImage.addEventListener('click', () => {
         if (typeof updateMasterTokenUI === 'function') updateMasterTokenUI();
     }
 
+    try {
+        if (typeof isBoostActive === 'function' && isBoostActive('boost_master_tokens')) {
+            masterTokens += 5;
+            if (typeof updateMasterTokenUI === 'function') updateMasterTokenUI();
+        }
+    } catch {}
+
     // Start cooldown
     canClick = false;
     if (cooldownBar) cooldownBar.style.width = '0%';
 
-    let timeLeft = currentCooldownTime;
+    // Respect temporary cooldown override from boosts
+    const overrideCd = (typeof getCooldownOverride === 'function') ? getCooldownOverride() : null;
+    const effectiveCooldown = overrideCd != null ? overrideCd : currentCooldownTime;
+    let timeLeft = effectiveCooldown;
     if (cooldownTimer) cooldownTimer.textContent = timeLeft.toFixed(2);
 
     const cooldownInterval = setInterval(() => {
         timeLeft -= 0.01;
-        const percentage = Math.max(0, Math.min(100, (currentCooldownTime - timeLeft) / currentCooldownTime * 100));
+    const percentage = Math.max(0, Math.min(100, (effectiveCooldown - timeLeft) / effectiveCooldown * 100));
         if (cooldownBar) cooldownBar.style.width = `${percentage}%`;
         if (cooldownTimer) cooldownTimer.textContent = Math.max(0, timeLeft).toFixed(2);
 
@@ -2310,7 +3974,7 @@ function updateBlueUpgradeUI() {
     if (earnLevelEl && earnTile && blueUpgrades.earnings) {
         const e = blueUpgrades.earnings;
         earnLevelEl.textContent = `Level: ${e.level}/${e.max}`;
-    earnEffectEl.textContent = `Current: +${e.level * e.scrapPerLevel} Scrap/click (+1000 / lvl)`;
+    earnEffectEl.textContent = `Current: +${e.level * e.scrapPerLevel} Scrap/click (+${e.scrapPerLevel} / lvl)`;
         if (e.level >= e.max) {
             earnCostEl.textContent = 'MAX';
             earnTile.style.opacity = 0.6;
@@ -2339,7 +4003,7 @@ function updateBlueUpgradeUI() {
             tiresTile.style.opacity = 0.6;
             tiresTile.style.pointerEvents = 'none';
         } else {
-            tiresEffectEl.textContent = `Current: x${currentBonus || 1} → x${nextBonus} ( +${t.perLevelBonus} / lvl )`;
+            tiresEffectEl.textContent = `Current: +${currentBonus} Tires/pickup → +${nextBonus} ( +${t.perLevelBonus} / lvl )`;
             const cost = getBlueUpgradeCost('tires');
             tiresCostEl.textContent = `Cost: ${cost} Tires`;
             tiresTile.style.pointerEvents = 'auto';
@@ -2460,6 +4124,17 @@ STATS = loadStats();
 ensureSettingsButton();
 ensureSettingsWindow();
 bindSettingsHandlers();
+
+// Auto-claim username on load (if already saved) to restore inventory and enforce ownership
+(function(){
+    try {
+        const proto = (location && location.protocol || '').toLowerCase();
+        if (proto !== 'file:') {
+            const n = getStoredNick();
+            if (n) claimUsernameOnServer(n);
+        }
+    } catch {}
+})();
 
 // ========= Themes: cycle via palette click =========
 (function initThemes(){
