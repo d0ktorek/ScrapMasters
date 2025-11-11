@@ -7,6 +7,174 @@ class SaveSystem {
         this.theme = null; // persisted theme class name (e.g., 'theme-dark')
     }
 
+    static get SIGNED_EXPORT_TYPE() { return 'scrapmasters-signed-save'; }
+    static get SIGNED_EXPORT_VERSION() { return '2'; }
+    static get SIGNED_EXPORT_ALGORITHM() { return 'SHA-256'; }
+
+    static looksLikeGameData(obj) {
+        return !!(obj && typeof obj === 'object' && (
+            Object.prototype.hasOwnProperty.call(obj, 'scraps') ||
+            Object.prototype.hasOwnProperty.call(obj, 'saveVersion') ||
+            (obj.upgradeLevels && Array.isArray(obj.upgradeLevels))
+        ));
+    }
+
+    static normalizeForHash(value, seen = new WeakSet()) {
+        if (value === null) return null;
+        const valueType = typeof value;
+        if (valueType === 'undefined' || valueType === 'function') {
+            return undefined; // mimic JSON.stringify behaviour
+        }
+        if (valueType !== 'object') {
+            return value;
+        }
+        if (seen.has(value)) {
+            throw new Error('Circular structure in save data');
+        }
+        seen.add(value);
+        try {
+            if (Array.isArray(value)) {
+                return value.map(item => SaveSystem.normalizeForHash(item, seen));
+            }
+            if (value instanceof Date) {
+                return value.toJSON();
+            }
+            const normalized = {};
+            const keys = Object.keys(value).sort();
+            for (const key of keys) {
+                const normalizedValue = SaveSystem.normalizeForHash(value[key], seen);
+                if (typeof normalizedValue !== 'undefined') {
+                    normalized[key] = normalizedValue;
+                }
+            }
+            return normalized;
+        } finally {
+            seen.delete(value);
+        }
+    }
+
+    static stableStringify(value) {
+        const normalized = SaveSystem.normalizeForHash(value);
+        return JSON.stringify(normalized);
+    }
+
+    static bufferToBase64(buffer) {
+        const bytes = new Uint8Array(buffer);
+        const chunkSize = 0x8000;
+        let binary = '';
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+            const chunk = bytes.subarray(i, i + chunkSize);
+            binary += String.fromCharCode.apply(null, chunk);
+        }
+        return btoa(binary);
+    }
+
+    static fallbackHash(input) {
+        // FNV-1a 32-bit combined twice for a quick fallback
+        let h1 = 0x811c9dc5;
+        let h2 = 0x811c9dc5;
+        for (let i = 0; i < input.length; i++) {
+            const code = input.charCodeAt(i);
+            h1 ^= code;
+            h1 = Math.imul(h1, 0x01000193);
+            h1 >>>= 0;
+            h2 ^= (code << 1) ^ (code >>> 1);
+            h2 = Math.imul(h2, 0x01000193);
+            h2 >>>= 0;
+        }
+        const toHex = (n) => n.toString(16).padStart(8, '0');
+        return `fnv1a-${toHex(h1)}${toHex(h2)}`;
+    }
+
+    static async computeIntegrityHash(serializedPayload) {
+        try {
+            if (window.crypto && window.crypto.subtle && typeof TextEncoder !== 'undefined') {
+                const encoder = new TextEncoder();
+                const data = encoder.encode(serializedPayload);
+                const digest = await window.crypto.subtle.digest(SaveSystem.SIGNED_EXPORT_ALGORITHM, data);
+                return SaveSystem.bufferToBase64(digest);
+            }
+        } catch (error) {
+            console.warn('[SaveSystem] crypto.subtle digest failed, falling back to non-cryptographic hash', error);
+        }
+        return SaveSystem.fallbackHash(serializedPayload);
+    }
+
+    static async createSignedBundle(payload) {
+        const canonical = SaveSystem.stableStringify(payload);
+        const signature = await SaveSystem.computeIntegrityHash(canonical);
+        return {
+            type: SaveSystem.SIGNED_EXPORT_TYPE,
+            version: SaveSystem.SIGNED_EXPORT_VERSION,
+            algorithm: SaveSystem.SIGNED_EXPORT_ALGORITHM,
+            issuedAt: new Date().toISOString(),
+            signature,
+            payload
+        };
+    }
+
+    static async verifySignedBundle(bundle) {
+        if (!bundle || typeof bundle !== 'object' || bundle.type !== SaveSystem.SIGNED_EXPORT_TYPE) {
+            return { ok: false, reason: 'unsupported', fatal: false };
+        }
+        if (!bundle.payload || typeof bundle.payload !== 'object') {
+            return { ok: false, reason: 'missing-payload', fatal: true };
+        }
+        if (!bundle.signature || typeof bundle.signature !== 'string') {
+            return { ok: false, reason: 'missing-signature', fatal: true };
+        }
+        try {
+            const canonical = SaveSystem.stableStringify(bundle.payload);
+            const expected = await SaveSystem.computeIntegrityHash(canonical);
+            const match = expected === bundle.signature;
+            if (!match) {
+                return { ok: false, reason: 'hash-mismatch', fatal: true };
+            }
+            return {
+                ok: true,
+                payload: bundle.payload,
+                meta: {
+                    version: bundle.version || null,
+                    issuedAt: bundle.issuedAt || null,
+                    algorithm: bundle.algorithm || SaveSystem.SIGNED_EXPORT_ALGORITHM,
+                    signature: bundle.signature
+                }
+            };
+        } catch (error) {
+            console.error('[SaveSystem] Failed to verify signed bundle', error);
+            return { ok: false, reason: 'verification-error', fatal: true };
+        }
+    }
+
+    static async resolveImportedPayload(raw) {
+        const direct = await SaveSystem.verifySignedBundle(raw);
+        if (direct.ok) {
+            return { status: 'signed-ok', payload: direct.payload, meta: direct.meta };
+        }
+        if (direct.fatal) {
+            return { status: 'signed-failed', reason: direct.reason };
+        }
+        if (raw && raw.payload) {
+            const nested = await SaveSystem.verifySignedBundle(raw.payload);
+            if (nested.ok) {
+                return { status: 'signed-ok', payload: nested.payload, meta: nested.meta };
+            }
+            if (nested.fatal) {
+                return { status: 'signed-failed', reason: nested.reason };
+            }
+        }
+        return { status: 'pass' };
+    }
+
+    async buildSignedExportSnapshot() {
+        const payload = this.getGameData();
+        return SaveSystem.createSignedBundle(payload);
+    }
+
+    async coerceImportedPayload(raw) {
+        return SaveSystem.resolveImportedPayload(raw);
+    }
+
     // Zwraca pozostały czas cooldownu (w sekundach z dokładnością) lub 0 jeśli brak
     getCurrentCooldownTimeLeft() {
         // Jeśli można klikać, cooldown nie aktywny
@@ -34,6 +202,14 @@ class SaveSystem {
         if (!loaded) {
             // Utwórz pierwszy zapis startowy
             this.saveGame();
+            try {
+                if (typeof requestSyncLeaderboard === 'function') {
+                    requestSyncLeaderboard(0);
+                } else if (typeof syncLeaderboardStats === 'function') {
+                    const maybePromise = syncLeaderboardStats();
+                    if (maybePromise && typeof maybePromise.catch === 'function') maybePromise.catch(() => {});
+                }
+            } catch {}
         }
         this.startAutoSave();
         this.setupBeforeUnloadSave();
@@ -78,6 +254,11 @@ class SaveSystem {
             // Tree upgrades dane
             treeUpgrades: [...treeUpgrades],
             selectedTreeUpgrade: selectedTreeUpgrade, // Dodano wybrany tree upgrade
+
+            scrapyardMastery: {
+                tier: typeof scrapyardMasteryTier !== 'undefined' ? scrapyardMasteryTier : 0,
+                level: typeof scrapyardMasteryLevel !== 'undefined' ? scrapyardMasteryLevel : 0
+            },
 
             // Blue upgrades
             blueUpgrades: {
@@ -189,6 +370,31 @@ class SaveSystem {
             if (gameData.treeUpgrades && Array.isArray(gameData.treeUpgrades)) {
                 for (let i = 0; i < gameData.treeUpgrades.length; i++) if (i < treeUpgrades.length) treeUpgrades[i].level = gameData.treeUpgrades[i].level != undefined ? gameData.treeUpgrades[i].level : 0;
             }
+            if (typeof updateBarrelMaxLevelFromTree === 'function') {
+                updateBarrelMaxLevelFromTree();
+            } else if (typeof isBuffedBarrelsUnlocked === 'function') {
+                try {
+                    barrelMaxLevel = isBuffedBarrelsUnlocked() ? BUFFED_BARREL_MAX_LEVEL : BASE_BARREL_MAX_LEVEL;
+                } catch {}
+            }
+            if (typeof refreshAllBarrelCosts === 'function') {
+                refreshAllBarrelCosts();
+            }
+            if (gameData.scrapyardMastery && typeof gameData.scrapyardMastery === 'object') {
+                const masteryTierCap = (typeof SCRAPYARD_MASTERY_TIER_MAX === 'number' && Number.isFinite(SCRAPYARD_MASTERY_TIER_MAX)) ? SCRAPYARD_MASTERY_TIER_MAX : 10;
+                if (typeof gameData.scrapyardMastery.level === 'number' && Number.isFinite(gameData.scrapyardMastery.level)) {
+                    scrapyardMasteryLevel = Math.max(0, Math.floor(gameData.scrapyardMastery.level));
+                }
+                if (typeof gameData.scrapyardMastery.tier === 'number' && Number.isFinite(gameData.scrapyardMastery.tier)) {
+                    scrapyardMasteryTier = Math.max(0, Math.min(masteryTierCap, Math.floor(gameData.scrapyardMastery.tier)));
+                }
+                if (typeof scrapyardMasteryTierCostCache !== 'undefined' && typeof scrapyardMasteryTierCostCache.clear === 'function') {
+                    scrapyardMasteryTierCostCache.clear();
+                }
+                if (typeof persistScrapyardMasteryProgress === 'function') {
+                    persistScrapyardMasteryProgress();
+                }
+            }
             if (gameData.hasTireInterval && treeUpgrades[1] && treeUpgrades[1].level > 0 && typeof startTireInterval === 'function') startTireInterval();
             if (gameData.storm) {
                 if (typeof stormPurchased !== 'undefined') stormPurchased = !!gameData.storm.purchased;
@@ -229,6 +435,14 @@ class SaveSystem {
             } catch {}
 
             this.updateAllUI();
+            try {
+                if (typeof requestSyncLeaderboard === 'function') {
+                    requestSyncLeaderboard(0);
+                } else if (typeof syncLeaderboardStats === 'function') {
+                    const maybePromise = syncLeaderboardStats();
+                    if (maybePromise && typeof maybePromise.catch === 'function') maybePromise.catch(() => {});
+                }
+            } catch {}
             if (typeof initStormAfterLoad === 'function') initStormAfterLoad();
             if (savedCooldownTimeLeft > 0) this.restoreCooldownTimer(savedCooldownTimeLeft);
             if (originalVersion < 1.4 && typeof stormPurchased !== 'undefined' && stormPurchased && (!nextStormTime || nextStormTime < Date.now())) {
@@ -571,16 +785,34 @@ class SaveSystem {
     // Resetowanie zapisu (przydatne do debugowania)
     resetSave() {
         try {
-            // Usuń zapis z localStorage
-            localStorage.removeItem(this.saveKey);
-            console.log('🗑️ Save deleted');
-            
-            // Resetuj wszystkie zmienne do wartości początkowych
+            const clearedKeys = [];
+            try {
+                // Zbierz klucze najpierw, aby modyfikacja localStorage nie pomijała wpisów
+                const keys = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key) keys.push(key);
+                }
+                keys.forEach((key) => {
+                    localStorage.removeItem(key);
+                    clearedKeys.push(key);
+                });
+                console.log(`🧹 Cleared ${clearedKeys.length} localStorage key(s).`);
+            } catch (storageError) {
+                console.warn('⚠️ Could not enumerate localStorage, falling back to clear()', storageError);
+                localStorage.clear();
+            }
+
+            // Usuń globalne flagi sesji, gdy istnieją
+            if (typeof window !== 'undefined') {
+                try { delete window.__SM_BANNED; } catch {}
+                try { delete window.__SM_BACKEND_BLOCKED; } catch {}
+            }
+
+            this.theme = null;
             this.resetAllGameVariables();
-            
-            // Aktualizuj cały interfejs użytkownika jak w normalnej grze
             this.updateAllUI();
-            
+
             console.log('🔄 Game reset to initial state');
         } catch (error) {
             console.error('❌ Error resetting save:', error);
@@ -641,6 +873,19 @@ class SaveSystem {
         tiles = 0; // Reset tiles
     if (typeof tilesTier !== 'undefined') tilesTier = 0; // Reset tiles tier
     if (typeof tilesLevel !== 'undefined') tilesLevel = 0; // Reset tiles level
+        if (typeof scrapyardMasteryTier !== 'undefined') scrapyardMasteryTier = 0;
+        if (typeof scrapyardMasteryLevel !== 'undefined') scrapyardMasteryLevel = 0;
+        if (typeof scrapyardMasteryTierCostCache !== 'undefined' && typeof scrapyardMasteryTierCostCache.clear === 'function') {
+            scrapyardMasteryTierCostCache.clear();
+        }
+        try {
+            if (typeof SCRAPYARD_MASTERY_STORAGE_KEY === 'string') {
+                localStorage.removeItem(SCRAPYARD_MASTERY_STORAGE_KEY);
+            }
+        } catch {}
+        if (typeof persistScrapyardMasteryProgress === 'function') {
+            persistScrapyardMasteryProgress();
+        }
         if (tireInterval) {
             clearInterval(tireInterval);
             tireInterval = null;
@@ -656,10 +901,20 @@ class SaveSystem {
         
         // Resetuj wszystkie koszty barrel do początkowych wartości
         if (typeof barrelCosts !== 'undefined') {
-            const initialBarrelCosts = [1, 2, 4, 8, 16, 32, 64, 128, 256];
-            for (let i = 0; i < barrelCosts.length && i < initialBarrelCosts.length; i++) {
-                barrelCosts[i] = initialBarrelCosts[i];
+            const baseCosts = (typeof INITIAL_BARREL_COSTS !== 'undefined') ? INITIAL_BARREL_COSTS : [1, 2, 4, 8, 16, 32, 64, 128, 256];
+            for (let i = 0; i < barrelCosts.length && i < baseCosts.length; i++) {
+                barrelCosts[i] = baseCosts[i];
             }
+        }
+        if (typeof updateBarrelMaxLevelFromTree === 'function') {
+            updateBarrelMaxLevelFromTree();
+        } else if (typeof isBuffedBarrelsUnlocked === 'function') {
+            try {
+                barrelMaxLevel = isBuffedBarrelsUnlocked() ? BUFFED_BARREL_MAX_LEVEL : BASE_BARREL_MAX_LEVEL;
+            } catch {}
+        }
+        if (typeof refreshAllBarrelCosts === 'function') {
+            refreshAllBarrelCosts();
         }
         
         // Resetuj widoczność elementów UI - ukryj wszystko co powinno być ukryte na początku
@@ -724,8 +979,11 @@ class SaveSystem {
             
             // Naprawa barrel levels
             if (typeof barrelLevels !== 'undefined') {
+                const cap = (typeof barrelMaxLevel === 'number')
+                    ? barrelMaxLevel
+                    : ((typeof isBuffedBarrelsUnlocked === 'function' && isBuffedBarrelsUnlocked()) ? BUFFED_BARREL_MAX_LEVEL : BASE_BARREL_MAX_LEVEL);
                 for (let i = 0; i < barrelLevels.length; i++) {
-                    if (barrelLevels[i] > 5) barrelLevels[i] = 5; // max 5 poziomów (unchanged)
+                    if (barrelLevels[i] > cap) barrelLevels[i] = cap;
                     if (barrelLevels[i] < 0) barrelLevels[i] = 0;
                 }
             }
@@ -739,15 +997,18 @@ class SaveSystem {
             if (scrapBonusPercent > 10) scrapBonusPercent = 10; // max 10%
             
             // Naprawa barrel costs - przywróć do normalnych wartości jeśli są zbyt wysokie
-            if (typeof barrelCosts !== 'undefined') {
-                const maxBarrelCosts = [1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144]; // maksymalne rozsądne koszty (extended)
+            if (typeof refreshAllBarrelCosts === 'function') {
+                refreshAllBarrelCosts();
+            } else if (typeof barrelCosts !== 'undefined') {
+                const baseCosts = (typeof INITIAL_BARREL_COSTS !== 'undefined') ? INITIAL_BARREL_COSTS : [1, 2, 4, 8, 16, 32, 64, 128, 256];
                 for (let i = 0; i < barrelCosts.length; i++) {
-                    if (barrelCosts[i] > maxBarrelCosts[i]) {
-                        // Przywróć do początkowego kosztu i podnieś zgodnie z poziomem
-                        const initialCost = [1, 2, 4, 8, 16, 32][i];
-                        barrelCosts[i] = initialCost * Math.pow(2, barrelLevels[i]);
+                    const baseCost = baseCosts[i] || 1;
+                    const level = barrelLevels && barrelLevels[i] ? barrelLevels[i] : 0;
+                    let nextCost = baseCost;
+                    for (let lvl = 1; lvl <= level; lvl++) {
+                        nextCost = Math.ceil(nextCost * 2);
                     }
-                    if (barrelCosts[i] < 1) barrelCosts[i] = [1, 2, 4, 8, 16, 32, 64, 128, 256][i];
+                    barrelCosts[i] = nextCost;
                 }
             }
             
@@ -790,22 +1051,24 @@ class SaveSystem {
     }
 
     // Eksportowanie zapisu (do pliku)
-    exportSave() {
+    async exportSave() {
         try {
             const gameData = this.getGameData();
-            const dataStr = JSON.stringify(gameData, null, 2);
-            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-            
+            const signedBundle = await SaveSystem.createSignedBundle(gameData);
+            const dataStr = JSON.stringify(signedBundle, null, 2);
+            const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+
             const exportFileDefaultName = `scrapMasters_save_${new Date().toISOString().slice(0,10)}.json`;
-            
+
             const linkElement = document.createElement('a');
             linkElement.setAttribute('href', dataUri);
             linkElement.setAttribute('download', exportFileDefaultName);
             linkElement.click();
-            
-            console.log('📤 Save exported');
+
+            console.log('📤 Save exported with integrity hash');
         } catch (error) {
             console.error('❌ Error exporting save:', error);
+            alert('Export failed: integrity preparation error.');
         }
     }
 
@@ -815,15 +1078,33 @@ class SaveSystem {
         if (!file) return;
 
         const reader = new FileReader();
-        reader.onload = (e) => {
+        reader.onload = async (e) => {
             try {
-                const gameData = JSON.parse(e.target.result);
+                const raw = JSON.parse(e.target.result);
+                const resolution = await SaveSystem.resolveImportedPayload(raw);
+                if (resolution.status === 'signed-failed') {
+                    alert('Import blocked: save file integrity check failed.');
+                    console.warn('[SaveSystem] Signed save rejected during import:', resolution.reason);
+                    return;
+                }
+                let gameData = null;
+                if (resolution.status === 'signed-ok') {
+                    gameData = resolution.payload;
+                } else if (SaveSystem.looksLikeGameData(raw)) {
+                    gameData = raw;
+                } else if (raw && raw.payload && SaveSystem.looksLikeGameData(raw.payload)) {
+                    gameData = raw.payload;
+                } else {
+                    alert('Error: Unsupported save format.');
+                    console.warn('[SaveSystem] Import rejected: unsupported format structure.');
+                    return;
+                }
                 localStorage.setItem(this.saveKey, JSON.stringify(gameData));
                 console.log('📥 Save imported');
-                location.reload(); // Przeładuj stronę
+                location.reload();
             } catch (error) {
                 console.error('❌ Error importing save:', error);
-                alert('Error: Invalid save file!');
+                alert('Error: Invalid or tampered save file!');
             }
         };
         reader.readAsText(file);

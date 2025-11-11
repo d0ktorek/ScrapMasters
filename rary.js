@@ -5,7 +5,6 @@ window.RARITIES = {
   Rare:      { key: 'Rare', weight: 0.10, color: '#4aa3ff', stock: [3,2,1] },
   Mythic:    { key: 'Mythic', weight: 0.05, color: '#ff66d9', stock: [3,2,1] },
   Legendary: { key: 'Legendary', weight: 0.01, color: '#FFD700', stock: [3,2,1] },
-  Moon:      { key: 'Moon', weight: 0.001, color: '#9d8fcaff', stock: [3,2,1] },
 };
 
 window.rollRarity = function() {

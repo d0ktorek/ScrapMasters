@@ -1,0 +1,27 @@
+{
+  "forbiddenKeys": [
+    "command",
+    "cmd",
+    "eval",
+    "setRebirths",
+    "setRebirth",
+    "setRebirthCount",
+    "setScrap",
+    "setScraps",
+    "rebirthcount",
+    "rebirth",
+    "scrapcount",
+    "scraps",
+    "maxtires",
+    "maxtirescount",
+    "$where",
+    "$eval",
+    "cheat",
+    "hack",
+    "exploit",
+    "="
+  ],
+  "maxRebirthIncrease": 3,
+  "maxScrapIncrease": 100000000,
+  "maxTiresIncrease": 100000
+}

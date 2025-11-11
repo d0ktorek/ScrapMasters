@@ -100,6 +100,11 @@ function serveFile(filePath, res, statusCode = 200) {
 }
 
 const server = http.createServer((req, res) => {
+  // API: Admin endpoints before others
+  if (req.url.startsWith('/api/admin')) {
+    handleAdminApi(req, res);
+    return;
+  }
   // API: Player endpoints before static
   if (req.url.startsWith('/api/player')) {
     handlePlayerApi(req, res);
@@ -245,13 +250,23 @@ const EIGHT_HOURS_MS = 8 * 60 * 60 * 1000;
 
 // Minimal on-server catalog mirroring items.js
 const SERVER_ITEMS = [
-  { id: 'low_cooldown', name: 'Low Cooldown', basePrice: 750 },
-  { id: 'sunny_day', name: 'Sunny Day', basePrice: 1500 },
-  { id: 'runny_day', name: 'Runny Day', basePrice: 2200 },
-  { id: 'real_autoclicker', name: 'Real Auto clicker', basePrice: 4000 },
-  { id: 'triple_drops', name: 'Triple Drops', basePrice: 6000 },
-  { id: 'boost_master_tokens', name: 'Boost Master Tokens', basePrice: 5000 },
+  { id: 'low_cooldown',        name: 'Low Cooldown',        basePrice: 10000 },
+  { id: 'sunny_day',           name: 'Sunny Day',           basePrice: 20000 },
+  { id: 'runny_day',           name: 'Runny Day',           basePrice: 20000 },
+  { id: 'real_autoclicker',    name: 'Real Auto clicker',   basePrice: 22000 },
+  { id: 'triple_drops',        name: 'Triple Drops',        basePrice: 27000 },
+  { id: 'boost_master_tokens', name: 'Boost Master Tokens', basePrice: 30000 },
 ];
+
+// Fixed Scrap prices per item id (ignore rarity multiplier for price)
+const PRICE_MAP = {
+  low_cooldown: 10000,
+  sunny_day: 20000,
+  runny_day: 20000,
+  real_autoclicker: 22000,
+  triple_drops: 27000,
+  boost_master_tokens: 30000,
+};
 
 const RARITY_TABLE = [
   { key: 'Legendary', weight: 0.01 },
@@ -302,21 +317,21 @@ function restockShop(prevState) {
   for (let i = 0; i < 3; i++) {
     // Force Common rarity for specific items
     const base = chooseRandomItem();
-  const rarity = base.id === 'low_cooldown' ? 'Common'
-         : base.id === 'sunny_day' ? 'Common'
-         : base.id === 'runny_day' ? 'Uncommon'
-         : base.id === 'real_autoclicker' ? 'Rare'
+    const rarity = base.id === 'low_cooldown' ? 'Common'
+      : base.id === 'sunny_day' ? 'Common'
+      : base.id === 'runny_day' ? 'Uncommon'
+      : base.id === 'real_autoclicker' ? 'Rare'
       : base.id === 'triple_drops' ? 'Rare'
       : base.id === 'boost_master_tokens' ? 'Rare'
-         : rollRarityServer();
-    // Price multiplier by rarity (simple placeholder)
-    const mult = rarity === 'Common' ? 1 : rarity === 'Uncommon' ? 1.5 : rarity === 'Rare' ? 2 : rarity === 'Mythic' ? 3 : 5;
+      : rollRarityServer();
+    // Use fixed price in Scrap regardless of rarity
+    const fixedPrice = PRICE_MAP[base.id] ?? base.basePrice;
     items.push({
       slot: i,
       id: base.id,
       name: base.name,
       rarity,
-      price: Math.round(base.basePrice * mult),
+      price: Math.round(fixedPrice),
       stock: SLOT_STOCK[i],
     });
   }
@@ -412,13 +427,32 @@ function handleShopApi(req, res) {
 // -----------------------------
 
 const PLAYERS_DB_PATH = path.join(staticRoot, 'playersdatabase.json');
+const BANS_DB_PATH = path.join(staticRoot, 'bans.json');
+const BANS_DB_PATH_LEGACY = path.join(staticRoot, 'ban.json');
+const ANTI_CHEAT_PATH = path.join(staticRoot, 'antycheat.json');
 
 function loadPlayersDb() {
   try {
     if (!fs.existsSync(PLAYERS_DB_PATH)) return {};
     const s = fs.readFileSync(PLAYERS_DB_PATH, 'utf8');
     const data = JSON.parse(s || '{}');
-    return (data && typeof data === 'object') ? data : {};
+    if (!data || typeof data !== 'object') return {};
+    const cleaned = {};
+    let changed = false;
+    for (const [key, value] of Object.entries(data)) {
+      const name = typeof key === 'string' ? key : String(key || '');
+      const record = value && typeof value === 'object' ? value : null;
+      const username = record && typeof record.username === 'string' ? record.username : name;
+      if (/^player-[a-z0-9]+$/i.test(username.trim())) {
+        changed = true;
+        continue;
+      }
+      cleaned[name] = record ? { ...record, username } : record;
+    }
+    if (changed) {
+      try { savePlayersDb(cleaned); } catch {}
+    }
+    return cleaned;
   } catch {
     return {};
   }
@@ -430,6 +464,39 @@ function savePlayersDb(db) {
   } catch {}
 }
 
+function loadBansDb() {
+  // Ban system removed – always return an empty structure.
+  return { usernames: {}, ips: {}, ownerIds: {} };
+}
+
+function saveBansDb() {
+  // Ban system removed – persistence no longer required.
+}
+
+function loadAntiCheat() {
+  const defaults = {
+    forbiddenKeys: ["command", "cmd", "eval", "setRebirths", "setScrap", "$where", "$eval", "cheat", "hack"],
+    maxRebirthIncrease: 3,
+    maxScrapIncrease: 1000000,
+    maxTiresIncrease: 1000000
+  };
+  try {
+    if (!fs.existsSync(ANTI_CHEAT_PATH)) return defaults;
+    const s = fs.readFileSync(ANTI_CHEAT_PATH, 'utf8');
+    const data = JSON.parse(s || '{}');
+    if (!data || typeof data !== 'object') return defaults;
+    const out = { ...defaults };
+    if (Array.isArray(data.forbiddenKeys)) out.forbiddenKeys = data.forbiddenKeys.filter(k => typeof k === 'string');
+    if (Number.isFinite(data.maxRebirthIncrease)) out.maxRebirthIncrease = Math.max(0, Math.floor(data.maxRebirthIncrease));
+    if (Number.isFinite(data.maxScrapIncrease)) out.maxScrapIncrease = Math.max(0, Math.floor(data.maxScrapIncrease));
+    if (Number.isFinite(data.maxTiresIncrease)) out.maxTiresIncrease = Math.max(0, Math.floor(data.maxTiresIncrease));
+    return out;
+  } catch {
+    return defaults;
+  }
+}
+
+
 function cleanString(x, max = 64) {
   if (typeof x !== 'string') x = String(x||'');
   x = x.trim();
@@ -437,19 +504,36 @@ function cleanString(x, max = 64) {
   return x;
 }
 
+function getIp(req) {
+  const xf = req.headers['x-forwarded-for'];
+  if (typeof xf === 'string' && xf.trim()) {
+    const first = xf.split(',')[0].trim();
+    if (first) return first;
+  }
+  return (req.socket && req.socket.remoteAddress) || '';
+}
+
+function getEffectiveBans() {
+  // Ban system removed – nothing is blocked.
+  return { bannedUsernames: new Set(), bannedIps: new Set(), bannedOwnerIds: new Set() };
+}
+
 function handlePlayerApi(req, res) {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  const logPrefix = `[PlayerAPI ${req.method} ${url.pathname}]`;
   // Leaderboard fetch endpoints
   if (req.method === 'GET' && url.pathname === '/api/player/leaderboard') {
     const by = (url.searchParams.get('by') || 'rebirths').toLowerCase();
     const allowed = new Set(['rebirths','maxscrap','maxtires']);
     const key = allowed.has(by) ? by : 'rebirths';
-    const db = loadPlayersDb();
-    const arr = Object.values(db || {}).filter(r => r && r.username);
+  const db = loadPlayersDb();
+  const { bannedUsernames, bannedIps, bannedOwnerIds } = getEffectiveBans(db);
+  const arr = Object.values(db || {}).filter(r => r && r.username && !/^player-/i.test(String(r.username)) && !bannedUsernames.has(String(r.username).toLowerCase()) && !(r.ip && bannedIps.has(r.ip)) && !(r.ownerId && bannedOwnerIds.has(r.ownerId)));
     const metricKey = key === 'rebirths' ? 'rebirths' : (key === 'maxscrap' ? 'maxScrap' : 'maxTires');
     arr.sort((a,b) => (Number(b[metricKey]||0) - Number(a[metricKey]||0)) || a.username.localeCompare(b.username));
     const top = arr.slice(0,50).map((r, idx) => ({ rank: idx+1, username: r.username, value: Number(r[metricKey]||0) }));
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    console.log(`${logPrefix} returned ${top.length} rows (by=${key}) from ${req.headers['x-forwarded-for'] || req.socket.remoteAddress}`);
     res.end(JSON.stringify({ ok: true, by: key, top }));
     return;
   }
@@ -459,7 +543,7 @@ function handlePlayerApi(req, res) {
     req.on('data', chunk => { body += chunk; if (body.length > 1e6) req.destroy(); });
     req.on('end', () => {
       try {
-        const data = JSON.parse(body || '{}');
+  const data = JSON.parse(body || '{}');
         const username = cleanString(data.username || '', 24);
         const clientId = cleanString(data.clientId || '', 48);
         if (!username || !clientId) {
@@ -467,22 +551,48 @@ function handlePlayerApi(req, res) {
           res.end(JSON.stringify({ ok: false, error: 'Missing username or clientId' }));
           return;
         }
+        if (/^player-[a-z0-9]+$/i.test(username)) {
+          res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ ok: false, error: 'auto-nickname-disallowed' }));
+          return;
+        }
+        // Anti-cheat system removed – claims are no longer blocked based on request keys.
         const db = loadPlayersDb();
+        const ip = getIp(req);
+        const { bannedUsernames, bannedIps, bannedOwnerIds } = getEffectiveBans(db);
+        // Block early if username is banned or IP/ownerId is banned
+        if (bannedUsernames.has(String(username).toLowerCase()) || (ip && bannedIps.has(ip)) || (clientId && bannedOwnerIds.has(clientId))) {
+          res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ ok: false, banned: true, message: 'You have been banned for not following the game rules (which do not exist). Please do not play unfairly.' }));
+          return;
+        }
         if (!db[username]) {
-          db[username] = { username, ownerId: clientId, inventory: [], updatedAt: new Date().toISOString(), rebirths: 0, maxScrap: 0, maxTires: 0 };
+          // Create new record; default ban=false; store ip
+          db[username] = { username, ownerId: clientId, inventory: [], updatedAt: new Date().toISOString(), rebirths: 0, maxScrap: 0, maxTires: 0, ban: false, ip };
           savePlayersDb(db);
+          console.log(`${logPrefix} claimed new username=${username} ownerId=${clientId} ip=${ip}`);
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(JSON.stringify({ ok: true, status: 'claimed', inventory: [] }));
           return;
         }
         const rec = db[username];
+        // Update last seen IP
+        rec.ip = ip || rec.ip || '';
+        if (bannedUsernames.has(String(username).toLowerCase()) || (ip && bannedIps.has(ip)) || (rec.ownerId && bannedOwnerIds.has(rec.ownerId))) {
+          savePlayersDb(db);
+          res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ ok: false, banned: true, message: 'You have been banned for not following the game rules (which do not exist). Please do not play unfairly.' }));
+          return;
+        }
         if (rec.ownerId && rec.ownerId !== clientId) {
           res.writeHead(409, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(JSON.stringify({ ok: false, error: 'name-taken' }));
           return;
         }
         // Either ownerId matches, or not set yet (bind to this client)
-        if (!rec.ownerId) { rec.ownerId = clientId; savePlayersDb(db); }
+        if (!rec.ownerId) { rec.ownerId = clientId; }
+        savePlayersDb(db);
+        console.log(`${logPrefix} verified username=${username} ownerId=${rec.ownerId || clientId} ip=${ip}`);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ ok: true, status: 'ok', inventory: Array.isArray(rec.inventory) ? rec.inventory : [], stats: { rebirths: Number(rec.rebirths||0), maxScrap: Number(rec.maxScrap||0), maxTires: Number(rec.maxTires||0) } }));
       } catch (e) {
@@ -497,7 +607,7 @@ function handlePlayerApi(req, res) {
     req.on('data', chunk => { body += chunk; if (body.length > 1e6) req.destroy(); });
     req.on('end', () => {
       try {
-        const data = JSON.parse(body || '{}');
+  const data = JSON.parse(body || '{}');
         let username = cleanString(data.username || '', 24);
         const clientId = cleanString(data.clientId || '', 48);
         if (!username) {
@@ -505,6 +615,12 @@ function handlePlayerApi(req, res) {
           res.end(JSON.stringify({ ok: false, error: 'Missing username' }));
           return;
         }
+        if (/^player-[a-z0-9]+$/i.test(username)) {
+          res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ ok: false, error: 'auto-nickname-disallowed' }));
+          return;
+        }
+  const ip = getIp(req);
   const invIn = Array.isArray(data.inventory) ? data.inventory : [];
         const inventory = [];
         for (let i = 0; i < Math.min(invIn.length, 6); i++) {
@@ -523,12 +639,60 @@ function handlePlayerApi(req, res) {
         const maxScrap = Math.max(0, Math.floor(Number(statsIn.maxScrap || 0)));
         const maxTires = Math.max(0, Math.floor(Number(statsIn.maxTires || 0)));
 
-        const db = loadPlayersDb();
+  const db = loadPlayersDb();
+        const { bannedUsernames, bannedIps, bannedOwnerIds } = getEffectiveBans(db);
         const rec = db[username];
         if (rec && rec.ownerId && clientId && rec.ownerId !== clientId) {
           res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
           res.end(JSON.stringify({ ok: false, error: 'name-taken' }));
           return;
+        }
+        // Ban enforcement removed – no blocking based on external lists.
+        // If this is the very first sync for this username (no record yet), accept as baseline
+        if (!rec) {
+          db[username] = {
+            username,
+            ownerId: clientId || undefined,
+            ip,
+            inventory,
+            rebirths,
+            maxScrap,
+            maxTires,
+            updatedAt: new Date().toISOString(),
+            warn: 0,
+            ban: false,
+          };
+          savePlayersDb(db);
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ ok: true }));
+          return;
+        }
+
+    // Anti-cheat checks: forbidden keys and excessive stat jumps
+    const acCfg = loadAntiCheat();
+    const lowerKeysSync = Object.keys(data || {}).map(k => k.toLowerCase());
+    const toksSync = Array.isArray(acCfg.forbiddenKeys) ? acCfg.forbiddenKeys.map(s => String(s).toLowerCase()) : [];
+    // also scan nested stats keys for suspicious names like RebirthCount, ScrapCount, etc.
+    const nestedKeysSync = Object.keys(statsIn || {}).map(k => k.toLowerCase());
+    const allowedStatsKeys = new Set(['rebirths', 'maxscrap', 'maxtires']);
+    const hasForbiddenTopKey = lowerKeysSync.some(k => toksSync.some(t => k === t || k.includes(t)));
+    const hasForbiddenStatKey = nestedKeysSync.some(k => !allowedStatsKeys.has(k) && toksSync.some(t => k === t || k.includes(t)));
+    let suspicious = (hasForbiddenTopKey || hasForbiddenStatKey) ? 'forbidden-key' : '';
+        if (!suspicious) {
+          const prevReb = Number((rec && rec.rebirths) || 0);
+          const prevMaxScrap = Number((rec && rec.maxScrap) || 0);
+          const prevMaxTires = Number((rec && rec.maxTires) || 0);
+          // Allow big first update after claim (baseline) without flagging
+          const isBaseline = (prevReb === 0 && prevMaxScrap === 0 && prevMaxTires === 0);
+          const dReb = Math.max(0, rebirths - prevReb);
+          const dScrap = Math.max(0, maxScrap - prevMaxScrap);
+          const dTires = Math.max(0, maxTires - prevMaxTires);
+          if (!isBaseline && (dReb > acCfg.maxRebirthIncrease || dScrap > acCfg.maxScrapIncrease || dTires > acCfg.maxTiresIncrease)) {
+            suspicious = 'excessive-stats';
+          }
+        }
+        if (suspicious) {
+          console.warn(`[anti-cheat disabled] Suspicious sync for ${username}: ${suspicious}`);
         }
         const ownerId = rec && rec.ownerId ? rec.ownerId : (clientId || undefined);
         const prev = rec || {};
@@ -539,9 +703,13 @@ function handlePlayerApi(req, res) {
           updatedAt: new Date().toISOString(),
           rebirths: Math.max(Number(prev.rebirths||0), rebirths),
           maxScrap: Math.max(Number(prev.maxScrap||0), maxScrap),
-          maxTires: Math.max(Number(prev.maxTires||0), maxTires)
+          maxTires: Math.max(Number(prev.maxTires||0), maxTires),
+          ban: prev.ban === true ? true : false,
+          warn: Math.max(0, Math.floor(Number(prev.warn || 0))),
+          ip: ip || prev.ip || ''
         };
         savePlayersDb(db);
+        console.log(`${logPrefix} synced username=${username} ownerId=${ownerId} rebirths=${rebirths} maxScrap=${maxScrap} maxTires=${maxTires} ip=${ip}`);
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ ok: true }));
       } catch (e) {
@@ -553,4 +721,39 @@ function handlePlayerApi(req, res) {
   }
   res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify({ error: 'Not Found' }));
+}
+
+// -----------------------------
+// Admin API (ban management)
+// -----------------------------
+
+function getAdminKey() {
+  const env = (process && process.env && process.env.ADMIN_KEY) || '';
+  if (env && typeof env === 'string') return env.trim();
+  try {
+    const p = path.join(staticRoot, 'admin.key');
+    if (fs.existsSync(p)) {
+      return String(fs.readFileSync(p, 'utf8')||'').trim();
+    }
+  } catch {}
+  return '';
+}
+
+function isLocalRequest(req) {
+  const ip = (req.socket && req.socket.remoteAddress) || '';
+  return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+}
+
+function isAuthorizedAdmin(req) {
+  const key = getAdminKey();
+  if (key) {
+    const hdr = req.headers['x-admin-key'];
+    return typeof hdr === 'string' && hdr.trim() === key;
+  }
+  return isLocalRequest(req);
+}
+
+function handleAdminApi(req, res) {
+  res.writeHead(410, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.end(JSON.stringify({ ok: false, error: 'ban-system-removed' }));
 }

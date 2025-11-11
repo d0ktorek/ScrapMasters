@@ -13,8 +13,8 @@
     <link rel="manifest" href="assets/icon/site.webmanifest">
 
     <link rel="shortcut icon" type="image/png" href="assets/icon/favicon-32x32.png">
-    <link rel="stylesheet" href="styles.css?v=1.0.9">
-    <link rel="stylesheet" href="themes.css?v=1.0.1">
+    <link rel="stylesheet" href="styles.css?v=1.0.10">
+    <link rel="stylesheet" href="themes.css?v=1.0.2">
 </head>
 <body>
 
@@ -28,7 +28,7 @@
             <img id="inventory-btn" src="assets/inventory1.png" alt="Inventory" title="Inventory">
         </div>
     </div>
-    <div class="version-info">Version 1.4 Multiplayer update</div>
+    <div class="version-info">Version 1.4.1 PATCH 1</div>
     <div class="game-content">
         <!-- Active boosts banner -->
         <div id="boosts-banner" class="hidden"></div>
@@ -40,30 +40,44 @@
             <div id="cooldown-bar"></div>
             <div id="cooldown-timer">5.00</div>
         </div>
-<div id="bottom-buttons">
-    <div id="greenupgrade-container">
-        <img id="greenupgrade-btn" src="assets/greenupgrade.png" alt="Green Upgrade">
+<div id="navigation-bar">
+    <div class="nav-slot" id="greenupgrade-container">
+        <button class="nav-btn" id="greenupgrade-btn" title="Green Upgrade">
+            <img src="assets/greenupgrade.png" alt="Green Upgrade">
+        </button>
     </div>
-    <div id="book-container" class="hidden">
-        <img id="book-btn" src="assets/book.png" alt="Book" title="Skills Book">
+    <div class="nav-slot hidden" id="book-container">
+        <button class="nav-btn" id="book-btn" title="Skills Book">
+            <img src="assets/book.png" alt="Book">
+        </button>
     </div>
-    <div id="mysterybook-container" class="hidden">
-        <img id="mysterybook-btn" src="assets/mysterybook.png" alt="Mystery Book" title="Mystery Book">
+    <div class="nav-slot hidden" id="mysterybook-container">
+        <button class="nav-btn" id="mysterybook-btn" title="Mystery Book">
+            <img src="assets/mysterybook.png" alt="Mystery Book">
+        </button>
     </div>
-    <div id="tree-container" class="hidden">
-        <img id="tree-btn" src="assets/tree.png" alt="Skill Tree" title="Skill Tree">
+    <div class="nav-slot hidden" id="tree-container">
+        <button class="nav-btn" id="tree-btn" title="Skill Tree">
+            <img src="assets/tree.png" alt="Skill Tree">
+        </button>
     </div>
-    <div id="blueupgrade-container" class="hidden">
-        <img id="blueupgrade-btn" src="assets/blueupgrade.png" alt="Blue Upgrade" title="Blue Upgrades">
+    <div class="nav-slot hidden" id="blueupgrade-container">
+        <button class="nav-btn" id="blueupgrade-btn" title="Blue Upgrades">
+            <img src="assets/blueupgrade.png" alt="Blue Upgrade">
+        </button>
     </div>
-    <div id="upgrade-container">
-        <img id="upgrade-btn" src="assets/update.png" alt="Upgrade">
+    <div class="nav-slot" id="upgrade-container">
+        <button class="nav-btn" id="upgrade-btn" title="Upgrade">
+            <img src="assets/update.png" alt="Upgrade">
+        </button>
     </div>
-    <div id="star-container">
-        <img id="star-btn" src="assets/star.png" alt="Rebirth" title="Rebirth">
+    <div class="nav-slot" id="star-container">
+        <button class="nav-btn" id="star-btn" title="Rebirth">
+            <img src="assets/star.png" alt="Rebirth">
+        </button>
     </div>
-    <div id="brick-container" class="hidden">
-        <img id="brick-img" src="assets/brick.png" alt="Brick" title="Brick" style="width:32px;height:32px;vertical-align:middle;">
+    <div class="nav-counter hidden" id="brick-container">
+        <img src="assets/brick.png" alt="Brick">
         <span id="brick-count">Brick: 0</span>
     </div>
 </div>
@@ -296,9 +310,17 @@
 
 <div id="mysterybook-window" class="hidden">
     <div class="mysterybook-content">
-        <h3>Mystery Book</h3>
-        <div class="mysterybook-description">
-            Upgrade barrels using Master Tokens.
+        <div class="mysterybook-header">
+            <div id="scrapyard-mastery-icon" class="mysterybook-mastery-icon hidden" title="Train Scrapyard Mastery">
+                <img src="assets/scrapyard.png" alt="Scrapyard Mastery">
+                <span id="scrapyard-mastery-badge" class="mysterybook-mastery-badge">-0.00%</span>
+            </div>
+            <div class="mysterybook-header-text">
+                <h3>Mystery Book</h3>
+                <div class="mysterybook-description">
+                    Upgrade barrels using Master Tokens.
+                </div>
+            </div>
         </div>
         <div class="mysterybook-grid">
             <div class="mysterybook-item">
@@ -357,11 +379,31 @@
             </div>
         </div>
         <div id="master-token-display">
-            <img src="assets/master.png" alt="Master Tokens">
+            <img src="assets/scrapyard.png" alt="Scrapyard" id="scrapyard-status-icon" class="mysterybook-status-icon hidden">
             <div id="master-token-count">Master Tokens: 0</div>
         </div>
         <div id="close-mysterybook">✕</div>
     </div>
+</div>
+
+<div id="scrapyard-mastery-window" class="hidden">
+    <div class="scrapyard-mastery-content">
+        <h3>Scrapyard Mastery</h3>
+    <div class="scrapyard-mastery-subtitle">Each level reduces Rebirth cost by 0.20%.</div>
+        <div class="scrapyard-mastery-card">
+            <button id="scrapyard-mastery-image" class="scrapyard-mastery-button" type="button">
+                <img src="assets/scrapyard.png" alt="Train Scrapyard Mastery">
+            </button>
+            <div class="scrapyard-mastery-stats">
+                <div id="scrapyard-mastery-tier">Tier: 0/10</div>
+                <div id="scrapyard-mastery-level">Level: 0</div>
+                <div id="scrapyard-mastery-reduction">Rebirth Cost Bonus: -0.00%</div>
+                <div id="scrapyard-mastery-cost">Cost per Tier: 2,000 Scrap</div>
+            </div>
+        </div>
+        <div class="scrapyard-mastery-hint">Click the scrapyard to purchase tiers. 10 tiers = 1 level.</div>
+    </div>
+    <div id="close-scrapyard-mastery">✕</div>
 </div>
 
 
@@ -416,9 +458,11 @@
             <div class="tree-slot" id="slot-6"></div>
             <div class="tree-slot" id="slot-7"></div>
             <div class="tree-slot" id="slot-8"></div>
+            <div class="tree-slot" id="slot-9"></div>
+            <div class="tree-slot" id="slot-10"></div>
 
             <!-- Connection lines (SVG overlay) -->
-            <svg class="tree-connections" viewBox="0 0 420 880" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+            <svg class="tree-connections" viewBox="0 0 420 1020" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
                 <!-- Better Scrapyard to Tires (left) -->
                 <line x1="210" y1="100" x2="70" y2="170" stroke="#333" stroke-width="4"/>
                 <!-- Better Scrapyard to Best Scrapyard (right) -->
@@ -439,6 +483,10 @@
                 <line x1="70" y1="610" x2="210" y2="730" stroke="#333" stroke-width="4"/>
                 <!-- Master Tokens Storm to Star Power -->
                 <line x1="350" y1="610" x2="210" y2="730" stroke="#333" stroke-width="4"/>
+                <!-- Star Power to ScrapYard Mastery (left) -->
+                <line x1="210" y1="800" x2="70" y2="890" stroke="#333" stroke-width="4"/>
+                <!-- Star Power to Buffed Barrels (right) -->
+                <line x1="210" y1="800" x2="350" y2="890" stroke="#333" stroke-width="4"/>
             </svg>
         </div>
         <div id="close-tree">✕</div>
@@ -574,7 +622,7 @@
             document.head.appendChild(style);
         })();
     </script>
-    <script src="script.js?v=1.0.4"></script>
+    <script src="script.js?v=1.0.6"></script>
     <script src="savescript.js?v=1.4.2"></script>
     <script src="admincommands.js"></script>
 </body>

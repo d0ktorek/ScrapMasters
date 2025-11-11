@@ -63,6 +63,23 @@
         console.log(`settires(): Set Tires (tiles) to ${tiles}`);
     };
 
+    window.ResetScrapyardMastery = function(){
+        if (typeof scrapyardMasteryLevel === 'undefined' || typeof scrapyardMasteryTier === 'undefined') {
+            console.log('ResetScrapyardMastery(): Scrapyard Mastery system not initialized');
+            return;
+        }
+        scrapyardMasteryLevel = 0;
+        scrapyardMasteryTier = 0;
+        if (typeof scrapyardMasteryTierCostCache !== 'undefined' && scrapyardMasteryTierCostCache && typeof scrapyardMasteryTierCostCache.clear === 'function') {
+            scrapyardMasteryTierCostCache.clear();
+        }
+        if (typeof persistScrapyardMasteryProgress === 'function') persistScrapyardMasteryProgress();
+        if (typeof updateScrapyardMasteryUI === 'function') updateScrapyardMasteryUI();
+        if (typeof updateRebirthUI === 'function') updateRebirthUI();
+        if (typeof saveSystem !== 'undefined') ensureSave();
+        console.log('ResetScrapyardMastery(): Scrapyard Mastery reset to Tier 0 / Level 0');
+    };
+
     window.resetblueupgrade = function(){
         if (typeof blueUpgrades === 'undefined' || !blueUpgrades.better) { console.log('resetblueupgrade(): Blue upgrades not initialized'); return; }
         blueUpgrades.better.level = 0;
@@ -71,6 +88,49 @@
         if (typeof updateBlueUpgradeUI === 'function') updateBlueUpgradeUI();
         ensureSave();
         console.log('resetblueupgrade(): All blue upgrade levels reset to 0');
+    };
+
+    window.unlocktree = function(){
+        if (typeof treeUpgrades === 'undefined' || !Array.isArray(treeUpgrades)) { console.log('unlocktree(): treeUpgrades not available'); return; }
+
+        treeUpgrades.forEach(upg => {
+            if (!upg) return;
+            const cap = typeof upg.maxLevel === 'number' && upg.maxLevel > 0 ? upg.maxLevel : 1;
+            upg.level = cap;
+        });
+
+        // Ensure systems tied to specific upgrades are active/visible
+        if (typeof startTireInterval === 'function') startTireInterval();
+        if (typeof blueUpgradeContainer !== 'undefined' && blueUpgradeContainer) blueUpgradeContainer.classList.remove('hidden');
+        if (typeof tilesyardSection !== 'undefined' && tilesyardSection) tilesyardSection.classList.remove('hidden');
+        if (typeof tilesyardSeparator !== 'undefined' && tilesyardSeparator) tilesyardSeparator.classList.remove('hidden');
+        if (typeof tilesyardStatus !== 'undefined' && tilesyardStatus) tilesyardStatus.textContent = 'Unlocked';
+        if (typeof stormPurchased !== 'undefined') stormPurchased = true;
+        if (typeof showStormTimer === 'function') showStormTimer();
+        if (typeof scheduleNextStorm === 'function') scheduleNextStorm(true);
+        if (typeof scrapyardPurchased !== 'undefined' && scrapyardPurchased) {
+            const betterOwned = treeUpgrades[0] && treeUpgrades[0].level > 0;
+            const bestOwned = treeUpgrades[3] && treeUpgrades[3].level > 0;
+            const perSecond = bestOwned ? 300 : (betterOwned ? 100 : (100/60));
+            try { if (typeof scrapyardInterval !== 'undefined' && scrapyardInterval) clearInterval(scrapyardInterval); } catch {}
+            scrapyardInterval = setInterval(() => {
+                scraps += perSecond;
+                if (typeof updateScrapCounter === 'function') updateScrapCounter();
+            }, 1000);
+        }
+
+        // Refresh dependent UIs
+        if (typeof updateTreeUI === 'function') updateTreeUI();
+        if (typeof updateScrapyardSectionsVisibility === 'function') updateScrapyardSectionsVisibility();
+        if (typeof updateScrapyardUI === 'function') updateScrapyardUI();
+        if (typeof updateTilesUI === 'function') updateTilesUI();
+        if (typeof updateBlueUpgradeUI === 'function') updateBlueUpgradeUI();
+        if (typeof updateMasterTokenUI === 'function') updateMasterTokenUI();
+        if (typeof updateBrickUI === 'function') updateBrickUI();
+        if (typeof updateMysteryBookUI === 'function') updateMysteryBookUI();
+
+        ensureSave();
+        console.log('unlocktree(): All tree upgrades set to their maximum levels.');
     };
 
     window.SendStorm = function(){
@@ -102,8 +162,20 @@
         if (typeof updateBlueUpgradeUI === 'function') updateBlueUpgradeUI();
         if (typeof updateScrapyardSectionsVisibility === 'function') updateScrapyardSectionsVisibility();
         if (typeof updateMasterTokenUI === 'function') updateMasterTokenUI();
+        if (typeof updateMysteryBookUI === 'function') updateMysteryBookUI();
         ensureSave();
         console.log('resettree(): All tree upgrades reset to level 0');
+    };
+
+    window.removetreeupg = function(){
+        console.log('removetreeupg(): Removing all purchased tree upgrades...');
+        if (typeof window.resettree === 'function') {
+            window.resettree();
+        } else {
+            console.log('removetreeupg(): resettree() unavailable; nothing changed.');
+            return;
+        }
+        console.log('removetreeupg(): Complete.');
     };
 
     // Full reset: wipe all progress and localStorage save
@@ -221,5 +293,5 @@
     };
 
     console.log('Admin commands loaded (developer utilities).');
-    console.log('Available admin commands: SetScrap(x), SetRebirth(x), setbrick(x), settokens(x), droptire(), settires(x), resetblueupgrade(), SendStorm(), resettree(), resetsave(), Refreshstore()');
+    console.log('Available admin commands: SetScrap(x), SetRebirth(x), setbrick(x), settokens(x), droptire(), settires(x), ResetScrapyardMastery(), resetblueupgrade(), unlocktree(), SendStorm(), resettree(), removetreeupg(), resetsave(), Refreshstore()');
 })();

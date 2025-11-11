@@ -6,10 +6,110 @@ let currentCooldownTime = 5.00;
 let scrapyardInterval = null;
 let scrapyardPurchased = false;
 const scrapyardCost = 2000;
+const SCRAPYARD_MASTERY_TIER_MAX = 10;
+const SCRAPYARD_MASTERY_BASE_TIER_COST = 2000;
+const SCRAPYARD_MASTERY_REDUCTION_PER_LEVEL = 0.002; // 0.20% per level
+const SCRAPYARD_MASTERY_STORAGE_KEY = 'sm_scrapyard_mastery';
+const scrapyardMasteryTierCostCache = new Map();
+let scrapyardMasteryTier = 0;
+let scrapyardMasteryLevel = 0;
 let rebirthCount = 0;
 // Dynamiczny koszt rebirth: pierwszy 2000, potem x1.85 za każdy kolejny
+function getScrapyardMasteryMultiplier() {
+    const reduction = (SCRAPYARD_MASTERY_REDUCTION_PER_LEVEL * scrapyardMasteryLevel) || 0;
+    const multiplier = 1 - reduction;
+    return Math.max(0.1, multiplier); // never drop below 10% of base cost
+}
+
+function getScrapyardMasteryReductionPercent() {
+    const reduction = (SCRAPYARD_MASTERY_REDUCTION_PER_LEVEL * scrapyardMasteryLevel) || 0;
+    return Math.max(0, reduction * 100);
+}
+
+function getScrapyardMasteryLevelMultiplier(levelNumber) {
+    if (levelNumber >= 200) return 1.20;
+    if (levelNumber >= 150) return 1.25;
+    if (levelNumber >= 100) return 1.30;
+    if (levelNumber >= 70) return 1.35;
+    if (levelNumber >= 40) return 1.50;
+    if (levelNumber >= 15) return 1.70;
+    if (levelNumber >= 10) return 1.75;
+    if (levelNumber >= 1) return 1.85;
+    return 1;
+}
+
+function getScrapyardMasteryTierCost() {
+    const appliedLevels = Math.max(0, scrapyardMasteryLevel || 0);
+    if (scrapyardMasteryTierCostCache.has(appliedLevels)) {
+        return scrapyardMasteryTierCostCache.get(appliedLevels);
+    }
+
+    let cost = SCRAPYARD_MASTERY_BASE_TIER_COST;
+    for (let levelIndex = 1; levelIndex <= appliedLevels; levelIndex++) {
+        cost = Math.ceil(cost * getScrapyardMasteryLevelMultiplier(levelIndex));
+    }
+
+    scrapyardMasteryTierCostCache.set(appliedLevels, cost);
+    return cost;
+}
+
+function persistScrapyardMasteryProgress() {
+    try {
+        const payload = {
+            tier: Math.max(0, Math.min(SCRAPYARD_MASTERY_TIER_MAX, scrapyardMasteryTier)),
+            level: Math.max(0, scrapyardMasteryLevel)
+        };
+        localStorage.setItem(SCRAPYARD_MASTERY_STORAGE_KEY, JSON.stringify(payload));
+    } catch {}
+}
+
+function loadScrapyardMasteryProgressFromStorage() {
+    try {
+        const raw = localStorage.getItem(SCRAPYARD_MASTERY_STORAGE_KEY);
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        if (data && typeof data === 'object') {
+            if (typeof data.level === 'number' && Number.isFinite(data.level)) {
+                scrapyardMasteryLevel = Math.max(0, Math.floor(data.level));
+            }
+            if (typeof data.tier === 'number' && Number.isFinite(data.tier)) {
+                scrapyardMasteryTier = Math.max(0, Math.min(SCRAPYARD_MASTERY_TIER_MAX, Math.floor(data.tier)));
+            }
+            scrapyardMasteryTierCostCache.clear();
+        }
+    } catch {}
+}
+
+loadScrapyardMasteryProgressFromStorage();
+
+function isScrapyardMasteryUnlocked() {
+    try {
+        const mastery = treeUpgrades && treeUpgrades.find(u => u && u.name === 'ScrapYard Mastery');
+        return !!(mastery && mastery.level > 0);
+    } catch {
+        return false;
+    }
+}
+
 function getCurrentRebirthCost() {
-    return Math.floor(2000 * Math.pow(1.85, rebirthCount));
+    // Tiered softcaps for next rebirth cost (in Scrap):
+    // base = 2000 for the 1st; then multipliers per step based on current rebirthCount (already owned)
+    // steps 0..2 (to reach 1..3): x1.85
+    // steps 3..5 (to reach 4..6): x1.5
+    // steps 6..9 (to reach 7..10): x1.4
+    // steps 10+ (to reach 11,12, ...): x1.2
+    const base = 2000;
+    const c = Math.max(0, Math.floor(Number(rebirthCount) || 0));
+    const n1 = Math.min(c, 3);                 // up to 3 steps at 1.85
+    const n2 = Math.min(Math.max(c - 3, 0), 3); // next up to 3 steps at 1.5 (3..5)
+    const n3 = Math.min(Math.max(c - 6, 0), 4); // next up to 4 steps at 1.4 (6..9)
+    const n4 = Math.max(c - 10, 0);             // remaining steps at 1.2 (10+)
+    const cost = base
+        * Math.pow(1.85, n1)
+        * Math.pow(1.5, n2)
+        * Math.pow(1.4, n3)
+        * Math.pow(1.2, n4);
+    return Math.floor(cost * getScrapyardMasteryMultiplier());
 }
 
 // Always render Scrap without decimals in the main counter
@@ -22,8 +122,8 @@ function updateScrapCounter() {
             counter.textContent = `Scrap: ${val}`;
         }
     }
+    if (typeof updateScrapyardMasteryUI === 'function') updateScrapyardMasteryUI();
 }
-
 // Dynamic cost model for +1 Scrap/click: keep early levels cheap, soften growth at high levels
 const UPG1_BASE_COST = 1;
 const UPG1_GROWTH = 1.05;        // L0..150
@@ -138,11 +238,23 @@ const closeRebirth = document.getElementById('close-rebirth');
 const confirmRebirthBtn = document.getElementById('confirm-rebirth');
 const rebirthCountDisplay = document.getElementById('rebirth-count');
 const greenUpgradeBtn = document.getElementById('greenupgrade-btn');
+const greenUpgradeContainer = document.getElementById('greenupgrade-container');
 const greenUpgradeWindow = document.getElementById('greenupgrade-window');
 const closeGreenUpgrade = document.getElementById('close-greenupgrade');
 const mysteryBookContainer = document.getElementById('mysterybook-container');
 const mysteryBookBtn = document.getElementById('mysterybook-btn');
 const masterTokenCount = document.getElementById('master-token-count');
+const scrapyardStatusIcon = document.getElementById('scrapyard-status-icon');
+const scrapyardMasteryIcon = document.getElementById('scrapyard-mastery-icon');
+const scrapyardMasteryBadge = document.getElementById('scrapyard-mastery-badge');
+const scrapyardMasteryWindow = document.getElementById('scrapyard-mastery-window');
+const scrapyardMasteryButton = document.getElementById('scrapyard-mastery-image');
+const scrapyardMasteryTierLabel = document.getElementById('scrapyard-mastery-tier');
+const scrapyardMasteryLevelLabel = document.getElementById('scrapyard-mastery-level');
+const scrapyardMasteryReductionLabel = document.getElementById('scrapyard-mastery-reduction');
+const scrapyardMasteryMultiplierLabel = document.getElementById('scrapyard-mastery-multiplier');
+const scrapyardMasteryCostLabel = document.getElementById('scrapyard-mastery-cost');
+const closeScrapyardMastery = document.getElementById('close-scrapyard-mastery');
 const brickCount = document.getElementById('brick-count');
 const brickContainer = document.getElementById('brick-container');
 const brickCounter = document.getElementById('brick-counter');
@@ -361,78 +473,162 @@ function stopSunnyDay() {
 }
 
 // ---- Real Auto clicker (Rare): for 60s, auto-clicks when cooldown is READY ----
-function startRealAutoClicker() {
-    if (realAutoClickerInterval) { try { clearInterval(realAutoClickerInterval); } catch {} realAutoClickerInterval = null; }
-    realAutoClickerInterval = setInterval(() => {
-        try {
-            if (isBoostActive && !isBoostActive('real_autoclicker')) { clearInterval(realAutoClickerInterval); realAutoClickerInterval = null; return; }
-        } catch {}
-        if (typeof canClick !== 'undefined' && canClick === true && scrapImage) {
-            // Trigger a real click only when ready
-            scrapImage.click();
+async function syncPlayerToServer() {
+    if (!isBackendAvailable()) return;
+    if (window.__SM_BANNED) return; // do not sync if banned
+    const { username } = resolveActiveUsername({ allowAuto: false });
+    if (!username) {
+        if (!hasWarnedMissingNickname) {
+            console.debug('[Sync] Skipping player sync because nickname is not set manually.');
         }
-    }, 50);
-}
-function stopRealAutoClicker() {
-    if (realAutoClickerInterval) { try { clearInterval(realAutoClickerInterval); } catch {} realAutoClickerInterval = null; }
-}
-
-// ---- Runny Day (Uncommon): spawn 40 falling scrap/barrel icons, each worth +150 Scrap on pickup ----
-function chooseRunnyStormImage() {
-    const imgs = [
-        'assets/scrap.png',
-        'assets/barrel1.png', 'assets/barrel2.png', 'assets/barrel3.png', 'assets/barrel4.png', 'assets/barrel5.png',
-        'assets/Barrel6.png', 'assets/Barrel7.png', 'assets/Barrel8.png'
-    ];
-    return imgs[Math.floor(Math.random() * imgs.length)];
-}
-
-function createFallingScrapBarrel() {
-    const el = document.createElement('img');
-    const imgSrc = chooseRunnyStormImage();
-    el.src = imgSrc;
-    const isBarrel = /barrel/i.test(imgSrc);
-    const W = isBarrel ? 76 : 66; // widen barrels by +10px
-    const H = isBarrel ? 76 : 66; // keep earlier +10px height for barrels
-    el.style.cssText = `
-        position: fixed;
-        width: ${W}px; height: ${H}px;
-        z-index: 999;
-        pointer-events: auto; cursor: pointer;
-        top: -80px; left: ${Math.random() * (window.innerWidth - W)}px;
-        animation: fallDown 2.8s linear; transition: transform 0.1s;
-    `;
-    const collect = () => {
-        const base = 150;
-        const mult = (typeof getDropMultiplier === 'function') ? getDropMultiplier() : 1;
-        const gain = base * mult;
-        scraps += gain;
-        if (typeof updateScrapCounter === 'function') updateScrapCounter();
-        try { if (typeof STATS !== 'undefined') { STATS.totalScrapEarned += gain; STATS.sessionScrapEarned = (STATS.sessionScrapEarned||0) + gain; } } catch {}
-        try { if (typeof bumpHighestScraps === 'function') bumpHighestScraps(gain); } catch {}
-        try { requestSyncLeaderboard(); } catch {}
-        el.style.transform = 'scale(1.15)';
-        setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 80);
-        if (typeof saveSystem !== 'undefined') try { saveSystem.saveGame(); } catch {}
-    };
-    el.addEventListener('mouseenter', collect);
-    el.addEventListener('click', collect);
-    el.addEventListener('touchstart', (e) => { try { e.preventDefault(); } catch {} collect(); }, { passive: false });
-    if (!document.getElementById('tire-animation')) {
-        const style = document.createElement('style');
-        style.id = 'tire-animation';
-        style.textContent = `
-            @keyframes fallDown {
-                from { top: -80px; transform: rotate(0deg); }
-                to { top: ${window.innerHeight + 80}px; transform: rotate(720deg); }
+        hasWarnedMissingNickname = true;
+        return;
+    }
+    hasWarnedMissingNickname = false;
+    const payload = { username, clientId: getClientId(), inventory: Array.isArray(inventory) ? inventory.slice(0, 6) : [] };
+    try {
+        const res = await fetch('/api/player/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!res.ok) {
+            const data = await res.json().catch(() => null);
+            if (res.status === 403) {
+                disableBackendSyncAfterForbidden('Server sync disabled after save error (403).');
+                console.warn('Player sync rejected with 403. Backend interactions disabled.');
+                if (data && data.antiCheat) {
+                    alert(data.message || 'Access Denied. Do not attempt to enter commands in the console or it will result in your account being banned.');
+                    return;
+                }
+                if (data && data.banned) {
+                    window.__SM_BANNED = true;
+                    showBanOverlay(data.message || 'You have been banned for not following the game rules (which do not exist). Please do not play unfairly.');
+                }
+                return;
             }
+        }
+    } catch {}
+}
+
+let backendOptIn = true;
+const BACKEND_BLOCK_KEY = 'sm_backend_blocked';
+
+try {
+    const stored = localStorage.getItem('sm_backend_opt_in');
+    if (stored === '0') {
+        backendOptIn = true;
+        localStorage.setItem('sm_backend_opt_in', '1');
+    }
+    if (localStorage.getItem(BACKEND_BLOCK_KEY) === '1') {
+        localStorage.removeItem(BACKEND_BLOCK_KEY);
+    }
+} catch (err) {}
+
+try { setBackendSyncOptIn(true, { silent: true, log: false }); } catch {}
+
+function isBackendAvailable() {
+    if (!backendOptIn) return false;
+    if (typeof window !== 'undefined') {
+        if (window.__SM_BACKEND_BLOCKED) return false;
+        if (window.__SM_BANNED) return false;
+    }
+    const proto = (location && location.protocol || '').toLowerCase();
+    if (!proto || !proto.startsWith('http')) return false;
+    return true;
+}
+
+// Auto-enable backend sync in local development (if user never opted in) so that chat/leaderboard work out of the box.
+// This prevents confusion when opening the site on localhost where nothing loads.
+(function ensureLocalBackendOptIn(){
+    try {
+        const proto = (location && location.protocol || '').toLowerCase();
+        const host = (location && location.hostname ? location.hostname.toLowerCase() : '');
+        if (proto.startsWith('http') && (host === 'localhost' || host === '127.0.0.1')) {
+            setBackendSyncOptIn(true, { silent: true, log: false });
+            backendOptIn = true;
+            console.log('[Dev] Auto-enabled backend sync for localhost.');
+        }
+    } catch {}
+})();
+
+function setBackendSyncOptIn(enabled, options = {}) {
+    const next = !!enabled;
+    const prev = backendOptIn;
+    backendOptIn = next;
+    try { localStorage.setItem('sm_backend_opt_in', next ? '1' : '0'); } catch {}
+    if (typeof window !== 'undefined') window.__SM_BACKEND_BLOCKED = next ? false : true;
+    if (next) {
+        try { localStorage.removeItem(BACKEND_BLOCK_KEY); } catch {}
+    } else {
+        try { localStorage.setItem(BACKEND_BLOCK_KEY, '1'); } catch {}
+    }
+    if (prev !== next && options.log !== false) {
+        console.log(`Backend sync ${next ? 'enabled' : 'disabled'}.`);
+    }
+    if (prev !== next && !options.silent) {
+    const message = options.message || (next ? 'Server sync enabled.' : 'Server sync disabled.');
+        const variant = options.variant || (next ? 'toast-success' : 'toast-error');
+        try { showBackendSyncToast(message, variant); } catch {}
+    }
+}
+
+function showBackendSyncToast(message, variant = '') {
+    if (typeof document === 'undefined') return;
+    const styleId = 'backend-sync-toast-style';
+    if (!document.getElementById(styleId)) {
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = `
+.backend-sync-toast {
+  position: fixed;
+  left: 50%;
+  top: 80px;
+  transform: translateX(-50%);
+  padding: 10px 18px;
+  background: rgba(15, 15, 25, 0.92);
+  color: #f5f5f5;
+  font-family: inherit;
+  font-size: 14px;
+  border-radius: 12px;
+  z-index: 9999;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+  opacity: 0;
+  animation: backendSyncToastFade 2.7s ease forwards;
+  pointer-events: none;
+}
+.backend-sync-toast.toast-error {
+  background: rgba(140, 35, 35, 0.92);
+}
+.backend-sync-toast.toast-success {
+  background: rgba(20, 120, 55, 0.92);
+}
+@keyframes backendSyncToastFade {
+  0% { opacity: 0; transform: translate(-50%, -10px); }
+  10% { opacity: 1; transform: translate(-50%, 0); }
+  80% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, 10px); }
+}
         `;
         document.head.appendChild(style);
     }
+    const el = document.createElement('div');
+    el.className = `backend-sync-toast${variant ? ` ${variant}` : ''}`;
+    el.textContent = message;
     document.body.appendChild(el);
     setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 2700);
 }
 
+function disableBackendSyncAfterForbidden(sourceMessage) {
+    const message = sourceMessage || 'Server sync encountered a 403 error.';
+    console.warn(message);
+    showBackendSyncToast(message, 'toast-error');
+}
+
+if (typeof window !== 'undefined') {
+    window.enableOnlineSync = () => setBackendSyncOptIn(true);
+    window.disableOnlineSync = () => setBackendSyncOptIn(false);
+}
 function spawnRunnyDayStorm(count = 40, spacingMs = 150) {
     if (runnyStormActive) return;
     runnyStormActive = true;
@@ -611,24 +807,8 @@ function useInventoryItem(index) {
     }
 }
 
-async function syncPlayerToServer() {
-    const proto = (location && location.protocol || '').toLowerCase();
-    if (proto === 'file:') return; // skip when not running via server
-    const username = getStoredNick();
-    if (!username) return;
-    const payload = { username, clientId: getClientId(), inventory: Array.isArray(inventory) ? inventory.slice(0, 6) : [] };
-    try {
-        await fetch('/api/player/sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-    } catch {}
-}
-
 async function claimUsernameOnServer(username) {
-    const proto = (location && location.protocol || '').toLowerCase();
-    if (proto === 'file:') return; // no backend in file mode
+    if (!isBackendAvailable()) return;
     if (!username) return;
     const payload = { username, clientId: getClientId() };
     try {
@@ -640,9 +820,25 @@ async function claimUsernameOnServer(username) {
         let data = null;
         try { data = await res.json(); } catch { data = null; }
         if (!res.ok) {
+            console.warn(`[Claim] POST /api/player/claim failed ${res.status}:`, data);
+            if (res.status === 403) {
+                disableBackendSyncAfterForbidden('Server sync encountered a 403 during nickname claim.');
+                if (data && data.antiCheat) {
+                    alert(data.message || 'Access Denied. Do not attempt to enter commands in the console or it will result in your account being banned.');
+                    return;
+                }
+                if (data && data.banned) {
+                    window.__SM_BANNED = true;
+                    showBanOverlay(data.message || 'You have been banned for not following the game rules (which do not exist). Please do not play unfairly.');
+                    return;
+                }
+                console.warn('Leaderboard/claim backend rejected with 403. Disabling further sync attempts.');
+                return;
+            }
             if (data && data.error === 'name-taken') {
-                alert('Nick jest zajęty. Wybierz inny.');
+                alert('Nickname is taken. Choose another.');
                 try { localStorage.removeItem('sm_username'); } catch {}
+                try { localStorage.removeItem('sm_username_manual'); } catch {}
                 if (typeof chatNameWindow !== 'undefined' && chatNameWindow) chatNameWindow.classList.remove('hidden');
                 if (typeof chatNameInput !== 'undefined' && chatNameInput) { chatNameInput.value = ''; setTimeout(() => chatNameInput.focus(), 0); }
                 return;
@@ -664,10 +860,14 @@ async function claimUsernameOnServer(username) {
 
 // Manual refresh of inventory from server's saved state
 async function reloadInventoryFromServer() {
+    if (!isBackendAvailable()) {
+    alert('Server sync is currently disabled. Enable it to fetch data from server.');
+        return;
+    }
     const proto = (location && location.protocol || '').toLowerCase();
-    if (proto === 'file:') { alert('Brak połączenia z serwerem.'); return; }
+    if (proto === 'file:') { alert('No server connection (file:// mode).'); return; }
     const username = getStoredNick();
-    if (!username) { alert('Ustaw najpierw nick w czacie.'); return; }
+    if (!username) { alert('Set your chat nickname first.'); return; }
     try {
         const res = await fetch('/api/player/claim', {
             method: 'POST',
@@ -677,8 +877,20 @@ async function reloadInventoryFromServer() {
         let data = null;
         try { data = await res.json(); } catch { data = null; }
         if (!res.ok) {
+            if (res.status === 403) {
+                disableBackendSyncAfterForbidden('Server sync disabled after inventory refresh attempt (403).');
+                if (data && data.antiCheat) {
+                    alert(data.message || 'Access Denied. Do not attempt to enter commands in the console or it will result in your account being banned.');
+                    return;
+                }
+                if (data && data.banned) {
+                    window.__SM_BANNED = true;
+                    showBanOverlay(data.message || 'You have been banned for not following the game rules (which do not exist). Please do not play unfairly.');
+                    return;
+                }
+            }
             if (data && data.error === 'name-taken') {
-                alert('Nick jest zajęty na innym urządzeniu.');
+                alert('Nickname is taken on another device.');
                 return;
             }
             throw new Error('HTTP ' + res.status);
@@ -690,8 +902,30 @@ async function reloadInventoryFromServer() {
             try { await syncPlayerToServer(); } catch {}
         }
     } catch (e) {
-        alert('Nie udało się odświeżyć ekwipunku.');
+    alert('Failed to refresh inventory.');
     }
+}
+
+// Simple centered overlay shown when player is banned
+function showBanOverlay(message) {
+    try {
+        if (document.getElementById('sm-ban-overlay')) return; // already shown
+        const overlay = document.createElement('div');
+        overlay.id = 'sm-ban-overlay';
+        overlay.className = 'ban-overlay';
+        const box = document.createElement('div');
+        box.className = 'ban-overlay-box';
+        const title = document.createElement('div');
+        title.className = 'ban-overlay-title';
+        title.textContent = 'Access Restricted';
+        const msg = document.createElement('div');
+        msg.className = 'ban-overlay-message';
+        msg.textContent = message || 'You have been banned for not following the game rules (which do not exist). Please do not play unfairly.';
+        box.appendChild(title);
+        box.appendChild(msg);
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+    } catch {}
 }
 
 function openInventory() {
@@ -853,7 +1087,7 @@ function ensureChatMuteOverlay() {
     if (!overlay) {
         overlay = document.createElement('div');
         overlay.className = 'chat-muted-overlay';
-        overlay.innerHTML = `<div class="mute-box"><div class="mute-title">Global Chat zablokowany</div><div class="mute-sub">Naruszenie zasad. Pozostało: <span class="mute-countdown">--:--</span></div></div>`;
+    overlay.innerHTML = `<div class="mute-box"><div class="mute-title">Global Chat muted</div><div class="mute-sub">Rule violation. Remaining: <span class="mute-countdown">--:--</span></div></div>`;
         chatWindow.appendChild(overlay);
     }
     return overlay;
@@ -904,14 +1138,14 @@ function handleModerationOffense() {
     if (offenses === 1) {
         setMuteUntil(Date.now() + 30 * 60 * 1000); // 30 minutes
         applyMuteStateUI();
-        appendChatLine({ text: 'Złamanie zasad: blokada pisania na 30 minut.', system: true });
+    appendChatLine({ text: 'Rule violation: chat muted for 30 minutes.', system: true });
     } else if (offenses === 2) {
         setMuteUntil(Date.now() + 2 * 60 * 60 * 1000); // 2 hours
         applyMuteStateUI();
-        appendChatLine({ text: 'Ponowne złamanie zasad: blokada pisania na 2 godziny.', system: true });
+    appendChatLine({ text: 'Second violation: chat muted for 2 hours.', system: true });
     } else {
         try { localStorage.clear(); } catch {}
-        alert('Trzecie złamanie zasad: Twój localStorage został wyczyszczony.');
+    alert('Third violation: localStorage cleared.');
         // hard reload to apply wipe
         try { location.reload(); } catch {}
     }
@@ -920,6 +1154,8 @@ function handleModerationOffense() {
 let chatSocket = null;
 let chatReconnectTimer = null;
 let chatSending = false; // prevents double send on click+enter
+
+let hasWarnedMissingNickname = false;
 
 // Stable client identifier to bind username ownership on the server
 function getClientId() {
@@ -938,13 +1174,41 @@ function getClientId() {
 function getStoredNick() {
     try { return localStorage.getItem('sm_username') || ''; } catch { return ''; }
 }
-function setStoredNick(nick) {
-    try { localStorage.setItem('sm_username', String(nick).slice(0,20)); } catch {}
-    try { claimUsernameOnServer(String(nick).slice(0,20)); } catch {}
+function setStoredNick(nick, opts = {}) {
+    const value = String(nick).slice(0, 20);
+    const auto = !!opts.auto;
+    try {
+        localStorage.setItem('sm_username', value);
+        localStorage.setItem('sm_username_manual', auto ? '0' : '1');
+    } catch {}
+    if (!auto) {
+        try { claimUsernameOnServer(value); } catch {}
+        try { requestSyncLeaderboard(0); } catch {}
+    }
+}
+
+function resolveActiveUsername(options = {}) {
+    const allowAuto = options.allowAuto === true;
+    let username = getStoredNick();
+    let manualFlag = null;
+    try { manualFlag = localStorage.getItem('sm_username_manual'); } catch {}
+    const looksManual = !!(username && !/^player-/i.test(username));
+    if (username && manualFlag === null) {
+        const inferred = looksManual ? '1' : '0';
+        try { localStorage.setItem('sm_username_manual', inferred); manualFlag = inferred; } catch {}
+    }
+    const manual = manualFlag === '1';
+    if (!username || !username.trim()) {
+        return { username: '', manual: false };
+    }
+    if (!manual && !allowAuto) {
+        return { username: '', manual: false };
+    }
+    return { username, manual };
 }
 function ensureNickname() {
-    const nick = getStoredNick();
-    if (!nick) {
+    const { username, manual } = resolveActiveUsername({ allowAuto: false });
+    if (!username || !manual) {
         // show modal
         if (chatNameWindow) chatNameWindow.classList.remove('hidden');
         if (chatNameInput) { chatNameInput.value = ''; setTimeout(() => chatNameInput.focus(), 0); }
@@ -954,11 +1218,11 @@ function ensureNickname() {
 }
 
 function updateChatUnlockUI() {
-    // Make the container always visible; show chat icon only after 1 rebirth
+    // Make the container and chat icon always visible
     if (!chatContainer) return;
     try { chatContainer.classList.remove('hidden'); } catch {}
     const earth = document.getElementById('earth-btn');
-    if (earth) earth.style.display = (rebirthCount < 1) ? 'none' : '';
+    if (earth) earth.style.display = '';
     // Ensure leaderboard is always visible from rebirth 0
     const lb = document.getElementById('leaderboard-btn');
     if (lb) lb.style.display = '';
@@ -971,9 +1235,9 @@ function updateChatUnlockUI() {
 
 function openChatWindow() {
     if (!chatWindow) return;
+    if (!ensureNickname()) return; // ask for nickname first
     chatWindow.classList.remove('hidden');
     chatWindow.classList.add('active');
-    if (!ensureNickname()) return; // ask for nickname first
     if (!chatSocket || chatSocket.readyState !== 1) connectChat();
     chatInput?.focus();
     applyMuteStateUI();
@@ -1083,7 +1347,14 @@ function sendChatMessage() {
 }
 
 function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+    const entities = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        '\'': '&#39;'
+    };
+    return String(s).replace(/[&<>"']/g, (c) => entities[c] || c);
 }
 
 if (chatBtn) chatBtn.addEventListener('click', () => {
@@ -1184,6 +1455,7 @@ try { applyMuteStateUI(); } catch {}
 // Debounced sync helper for leaderboard
 let syncLbTimer = null;
 function requestSyncLeaderboard(delay = 600) {
+    if (!isBackendAvailable()) return;
     if (syncLbTimer) clearTimeout(syncLbTimer);
     syncLbTimer = setTimeout(() => { syncLbTimer = null; syncLeaderboardStats(); }, delay);
 }
@@ -1193,11 +1465,31 @@ try { setTimeout(() => { peakTiles = Math.max(peakTiles, Number(tiles)||0); }, 0
 
 // Periodic sync every 60s
 try { setInterval(syncLeaderboardStats, 60000); } catch {}
+try { requestSyncLeaderboard(1200); } catch {}
 
 // Sync on tab hide/exit
 try {
-    window.addEventListener('beforeunload', () => { try { navigator.sendBeacon && navigator.sendBeacon('/api/player/sync', new Blob([JSON.stringify({ username: getStoredNick(), clientId: getClientId(), inventory: (inventory||[]).slice(0,6), stats: { rebirths: (STATS&&STATS.rebirths)||rebirthCount||0, maxScrap: (STATS&&STATS.highestScraps)||0, maxTires: Math.max(peakTiles, (STATS&&STATS.peakTiles)||0) } })], { type: 'application/json' })); } catch {} });
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') requestSyncLeaderboard(0); });
+    window.addEventListener('beforeunload', () => {
+        if (!isBackendAvailable() || window.__SM_BANNED) return;
+        try {
+            if (navigator.sendBeacon) {
+                const payload = {
+                    username: getStoredNick(),
+                    clientId: getClientId(),
+                    inventory: (inventory || []).slice(0, 6),
+                    stats: {
+                        rebirths: (STATS && STATS.rebirths) || rebirthCount || 0,
+                        maxScrap: (STATS && STATS.highestScraps) || 0,
+                        maxTires: Math.max(peakTiles, (STATS && STATS.peakTiles) || 0)
+                    }
+                };
+                navigator.sendBeacon('/api/player/sync', new Blob([JSON.stringify(payload)], { type: 'application/json' }));
+            }
+        } catch {}
+    });
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') requestSyncLeaderboard(0);
+    });
 } catch {}
 
 // ===== Leaderboard =====
@@ -1215,8 +1507,17 @@ function formatExponent(value) {
 }
 
 async function fetchLeaderboard(by) {
+    if (!isBackendAvailable()) return [];
     try {
         const res = await fetch(`/api/player/leaderboard?by=${encodeURIComponent(by)}`);
+        if (!res.ok) {
+            const body = await res.text().catch(() => '<no body>');
+            console.warn(`[Leaderboard] fetch failed ${res.status}: ${body}`);
+            if (res.status === 403) {
+                disableBackendSyncAfterForbidden('Server sync encountered a 403 during leaderboard fetch.');
+            }
+            return [];
+        }
         const data = await res.json();
         if (!data || !data.ok) throw new Error('Bad response');
         return Array.isArray(data.top) ? data.top : [];
@@ -1229,15 +1530,39 @@ function renderLeaderboard(rows, by) {
     const list = document.getElementById('leaderboard-list');
     if (!list) return;
     list.innerHTML = '';
-    rows.forEach(r => {
+    if (!rows.length) {
+        const msg = document.createElement('div');
+        msg.style.padding = '8px';
+        msg.style.color = 'var(--muted)';
+    msg.textContent = isBackendAvailable() ? 'No data returned by server.' : 'Server unavailable – offline mode.';
+        list.appendChild(msg);
+        return;
+    }
+    const visibleRows = rows.filter(r => r && r.username && !/^player-/i.test(String(r.username)));
+    if (!visibleRows.length) {
+        const msg = document.createElement('div');
+        msg.style.padding = '8px';
+        msg.style.color = 'var(--muted)';
+        msg.textContent = 'No public entries yet. Set your nickname in Settings › Global Chat to appear.';
+        list.appendChild(msg);
+        return;
+    }
+    const hiddenCount = rows.length - visibleRows.length;
+    visibleRows.forEach((r, idx) => {
         const div = document.createElement('div');
         div.className = 'leaderboard-row';
         const valStr = by === 'rebirths' ? String(r.value) : formatExponent(r.value);
-        div.innerHTML = `<div class="leaderboard-rank">${r.rank}</div>`+
+        div.innerHTML = `<div class="leaderboard-rank">${idx + 1}</div>`+
                         `<div class="leaderboard-name">${escapeHtml(r.username)}</div>`+
                         `<div class="leaderboard-value">${valStr}</div>`;
         list.appendChild(div);
     });
+    if (hiddenCount > 0) {
+        const note = document.createElement('div');
+        note.className = 'leaderboard-note extra';
+        note.textContent = 'Some entries are hidden until players set a custom nickname.';
+        list.appendChild(note);
+    }
 }
 
 async function openLeaderboard(defaultTab = 'rebirths') {
@@ -1252,6 +1577,8 @@ async function openLeaderboard(defaultTab = 'rebirths') {
     document.querySelectorAll('.lb-tab').forEach(btn => {
         if (!btn._smBound) { btn.addEventListener('click', () => switchLeaderboardTab(btn.dataset.tab)); btn._smBound = true; }
     });
+    // Push latest stats before fetching leaderboard so it reflects current session
+    try { await syncLeaderboardStats(); } catch {}
     await switchLeaderboardTab(defaultTab);
 }
 function closeLeaderboard() {
@@ -1302,10 +1629,16 @@ function updatePeaksAfterScrapChange() {
 }
 
 async function syncLeaderboardStats() {
-    const proto = (location && location.protocol || '').toLowerCase();
-    if (proto === 'file:') return;
-    const username = getStoredNick();
-    if (!username) return;
+    if (!isBackendAvailable()) return;
+    const { username } = resolveActiveUsername({ allowAuto: false });
+    if (!username) {
+        if (!hasWarnedMissingNickname) {
+            console.debug('[Sync] Skipping leaderboard sync because nickname is not set manually.');
+        }
+        hasWarnedMissingNickname = true;
+        return;
+    }
+    hasWarnedMissingNickname = false;
     const payload = {
         username,
         clientId: getClientId(),
@@ -1317,9 +1650,14 @@ async function syncLeaderboardStats() {
         }
     };
     try {
-        await fetch('/api/player/sync', {
+        const res = await fetch('/api/player/sync', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
         });
+        if (!res.ok) {
+            const body = await res.text().catch(() => '<no body>');
+            console.warn(`[Sync] POST /api/player/sync failed ${res.status}: ${body}`);
+            if (res.status === 403) disableBackendSyncAfterForbidden('Server sync encountered a 403 during stat sync.');
+        }
     } catch {}
 }
 
@@ -1330,7 +1668,7 @@ if (chatNameSave) {
         e.preventDefault();
         const val = (chatNameInput?.value || '').trim().slice(0,20);
         if (!val) { chatNameInput?.focus(); return; }
-        setStoredNick(val);
+    setStoredNick(val, { auto: false });
         if (chatNameWindow) chatNameWindow.classList.add('hidden');
         // if chat is open and socket not connected yet, connect now
         if (chatWindow && chatWindow.classList.contains('active') && (!chatSocket || chatSocket.readyState !== 1)) {
@@ -1549,15 +1887,27 @@ window.addEventListener('beforeunload', () => {
             // bind hint badge
             const h = card.querySelector('.hint-badge');
             if (h) h.addEventListener('click', () => openItemHint(it));
+            // enrich buy button with price/id metadata
+            const buyBtn = card.querySelector('.itemshop-buy');
+            if (buyBtn) {
+                buyBtn.setAttribute('data-id', String(it.id||''));
+                buyBtn.setAttribute('data-price', String(Number(it.price||0)));
+            }
             itemshopGrid.appendChild(card);
         }
         itemshopGrid.querySelectorAll('.itemshop-buy').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 const el = e.currentTarget;
                 const slot = Number(el.getAttribute('data-slot'));
+                const price = Number(el.getAttribute('data-price') || '0');
                 // Inventory capacity check
                 if (inventory.length >= INVENTORY_SLOTS) {
                     alert('Your inventory is full (6/6). You cannot buy this item.');
+                    return;
+                }
+                // Afford check with Scrap
+                if (typeof scraps === 'number' && price > 0 && scraps < price) {
+                    alert(`Not enough Scrap. You need ${price.toLocaleString()} Scrap.`);
                     return;
                 }
                 el.disabled = true;
@@ -1573,6 +1923,13 @@ window.addEventListener('beforeunload', () => {
                     if (data.item) {
                         const ok = addToInventory(data.item);
                         if (!ok) alert('Your inventory is full. Item not added.');
+                    }
+                    // Deduct Scrap on success
+                    if (typeof scraps === 'number' && price > 0) {
+                        scraps -= price;
+                        if (scraps < 0) scraps = 0;
+                        if (typeof updateScrapCounter === 'function') updateScrapCounter();
+                        try { if (window.STATS) STATS.scrapSpent = (STATS.scrapSpent||0) + price; } catch {}
                     }
                     // Disable buy after successful purchase (single-stock per restock)
                     el.disabled = true;
@@ -1635,12 +1992,12 @@ function ensureSettingsWindow() {
     const wrap = document.createElement('div');
     wrap.id = 'settings-window';
     wrap.className = 'hidden';
-    wrap.innerHTML = `
+            card.innerHTML = `
         <div class="settings-content">
             <h3>Settings</h3>
             <div id="settings-stats" class="settings-stats">
                 <div class="stat"><span class="label">Now:</span> <span id="stat-now">-</span></div>
-                <div class="stat"><span class="label">Session start:</span> <span id="stat-session-start">-</span></div>
+                <button class="itemshop-buy" data-slot="${it.slot}" ${it.stock<=0?'disabled':''}>Buy</button>
                 <div class="stat"><span class="label">Session time:</span> <span id="stat-session-time">-</span></div>
                 <div class="stat"><span class="label">Total time:</span> <span id="stat-total-time">-</span></div>
                 <div class="stat"><span class="label">First seen:</span> <span id="stat-first-seen">-</span></div>
@@ -1814,11 +2171,35 @@ function exportSimpleSave() {
     URL.revokeObjectURL(a.href);
     a.remove();
 }
-function applyImportedData(obj) {
+async function applyImportedData(obj) {
     try { console.debug('[Import] applyImportedData start. typeof:', typeof obj); } catch {}
     // 1) If custom importer exposed, let it handle
     if (obj && obj.type === 'custom' && obj.payload && typeof window.gameImportSave === 'function') {
         try { console.debug('[Import] Detected custom payload, delegating to gameImportSave'); window.gameImportSave(obj.payload); return true; } catch(e) { try { console.debug('[Import] custom handler failed:', e); } catch {} }
+    }
+    if (window.saveSystem && typeof window.saveSystem.coerceImportedPayload === 'function') {
+        try {
+            const resolution = await window.saveSystem.coerceImportedPayload(obj);
+            if (resolution && resolution.status === 'signed-failed') {
+                alert('Import failed: save integrity hash mismatch.');
+                console.warn('[Import] Signed save rejected due to integrity failure.');
+                return false;
+            }
+            if (resolution && resolution.status === 'signed-ok') {
+                const key = (window.saveSystem && window.saveSystem.saveKey) ? window.saveSystem.saveKey : 'scrapMastersGameSave';
+                localStorage.setItem(key, JSON.stringify(resolution.payload));
+                try {
+                    if (resolution.meta && resolution.meta.signature) {
+                        console.debug('[Import] Signed save accepted. Signature:', resolution.meta.signature);
+                    }
+                } catch {}
+                return true;
+            }
+        } catch (err) {
+            console.error('[Import] Integrity resolution failed', err);
+            alert('Import failed: could not verify save integrity.');
+            return false;
+        }
     }
     // Accept stringified JSON or { data: {...} } wrappers
     try {
@@ -1962,12 +2343,12 @@ function bindSettingsHandlers() {
         const f = e.target.files && e.target.files[0];
         if (f) {
             const reader = new FileReader();
-            reader.onload = () => {
+            reader.onload = async () => {
                 try {
                     try { console.debug('[Import] File selected:', f.name, f.size + ' bytes'); } catch {}
                     const data = JSON.parse(reader.result);
                     // Always try to apply by writing directly to localStorage (save key or full dump)
-                    const ok = applyImportedData(data);
+                    const ok = await applyImportedData(data);
                     if (ok) {
                         try { console.debug('[Import] Import OK. Reloading page...'); } catch {}
                         try { localStorage.setItem('sm_skip_next_save', '1'); } catch {}
@@ -2002,7 +2383,7 @@ function bindSettingsHandlers() {
         if (!text) return;
         try {
             const data = JSON.parse(text);
-            const ok = applyImportedData(data);
+            const ok = await applyImportedData(data);
             if (ok) {
                 try { localStorage.setItem('sm_skip_next_save', '1'); } catch {}
                 // Patch out save on this page to avoid beforeunload overwrite even with older cached scripts
@@ -2058,8 +2439,13 @@ function updateRebirthUI() {
 }
 
 function updateGreenUpgradeUI() {
-    if (!greenUpgradeBtn) return;
-    greenUpgradeBtn.style.display = (rebirthCount > 0) ? "block" : "none";
+    const show = rebirthCount > 0;
+    if (greenUpgradeContainer) {
+        greenUpgradeContainer.classList.toggle('hidden', !show);
+    }
+    if (greenUpgradeBtn) {
+        greenUpgradeBtn.disabled = !show;
+    }
 }
 
 function updateGreenUpgradeBarrelAvailability() {
@@ -2395,68 +2781,59 @@ function performRebirth() {
 
 function buyUpgrade(index) {
     if (index === 0) {
-        const currentLevel = upgradeLevels[index];
-        if (upgradeLevels[0] >= 2 && upgradeLevels[1] === 0) {
-    document.querySelector('.upgrade-item[data-index="1"]').classList.remove('hidden');
-}
-        
+        const currentLevel = upgradeLevels[0] || 0;
         const cost = getUpgrade1Cost(currentLevel);
-        if (scraps >= cost) {
-            if (STATS) { STATS.scrapSpent += cost; STATS.upgradesBought += 1; }
-            scraps -= cost;
-            upgradeLevels[index]++;
-            scrapPerClick += 1; // now +1 Scrap/click per level
-            updateScrapCounter();
-            
-            if (upgradeLevels[0] >= 2 && upgradeLevels[1] === 0) {
-                document.querySelector('.upgrade-item[data-index="1"]').classList.remove('hidden');
-            }
-            
-            updateUpgradeInfo();
-            updateScrapyardUI();
-            if (window.saveSystem) saveSystem.saveGame();
+        if (scraps < cost) return;
+        if (STATS) { STATS.scrapSpent += cost; STATS.upgradesBought += 1; }
+        scraps -= cost;
+        upgradeLevels[0] = currentLevel + 1;
+        scrapPerClick += 1; // now +1 Scrap/click per level
+        updateScrapCounter();
+
+        if (upgradeLevels[0] >= 2 && upgradeLevels[1] === 0) {
+            const autoclickerTile = document.querySelector('.upgrade-item[data-index="1"]');
+            if (autoclickerTile) autoclickerTile.classList.remove('hidden');
         }
-    } 
-    else if (index === 1) {
-        // Sprawdź czy autoclicker już na max poziomie (1)
-            if (upgradeLevels[1] >= AUTOCLICKER_MAX_LEVEL) {
-            return; // Już na max poziomie, nie pozwalaj na kolejny upgrade
+
+        updateUpgradeInfo();
+        updateScrapyardUI();
+        if (window.saveSystem) saveSystem.saveGame();
+        return;
+    }
+    if (index === 1) {
+        if (upgradeLevels[1] >= AUTOCLICKER_MAX_LEVEL) return;
+        if (scraps < upgrade2Cost) return;
+        if (STATS) { STATS.scrapSpent += upgrade2Cost; STATS.upgradesBought += 1; }
+        scraps -= upgrade2Cost;
+        upgradeLevels[1] += 1;
+        updateScrapCounter();
+
+        if (!autoClickerInterval) {
+            autoClickerInterval = setInterval(() => {
+                if (STATS) {
+                    STATS.autoClicks += 1;
+                    STATS.autoClicksSession = (STATS.autoClicksSession || 0) + 1;
+                    STATS.totalScrapEarned += 1;
+                    STATS.sessionScrapEarned = (STATS.sessionScrapEarned || 0) + 1;
+                    bumpHighestScraps(1);
+                }
+                scraps += 1;
+                updateScrapCounter();
+                checkUpgradeUnlock();
+                updateScrapyardUI();
+            }, 1000);
         }
-        
-        // NAJPIERW sprawdź czy mamy wystarczająco scrapu
-        if (scraps >= upgrade2Cost) {
-            if (STATS) { STATS.scrapSpent += upgrade2Cost; STATS.upgradesBought += 1; }
-            scraps -= upgrade2Cost;
-            upgradeLevels[index]++;
-            updateScrapCounter();
-            
-            if (!autoClickerInterval) {
-                autoClickerInterval = setInterval(() => {
-                    if (STATS) {
-                        STATS.autoClicks += 1;
-                        STATS.autoClicksSession = (STATS.autoClicksSession || 0) + 1;
-                        STATS.totalScrapEarned += 1;
-                        STATS.sessionScrapEarned = (STATS.sessionScrapEarned || 0) + 1;
-                        bumpHighestScraps(1);
-                    }
-                    scraps += 1;
-                    updateScrapCounter();
-                    checkUpgradeUnlock();
-                    updateScrapyardUI();
-                }, 1000);
-            }
-            
-            updateUpgradeInfo();
-            enforceAutoclickerCap();
-            updateScrapyardUI();
-            if (window.saveSystem) saveSystem.saveGame();
-            
-            // DOPIERO PO UDANYM ZAKUPIE odblokowuj następny upgrade
-            if (upgradeLevels[2] === 0) {
-                showCooldownUpgrade();
-                if (typeof refreshUpgradeVisibility === 'function') refreshUpgradeVisibility();
-            }
+
+        updateUpgradeInfo();
+        enforceAutoclickerCap();
+        updateScrapyardUI();
+        if (window.saveSystem) saveSystem.saveGame();
+
+        if (upgradeLevels[2] === 0) {
+            showCooldownUpgrade();
+            if (typeof refreshUpgradeVisibility === 'function') refreshUpgradeVisibility();
         }
+        return;
     }
     else if (index === 2) {
     const currentLevel = upgradeLevels[index];
@@ -2593,31 +2970,20 @@ function updateBarrelImage(index) {
 
 let scrapBonusPercent = 0;
 // Blue Upgrades system (permanent Tires-based)
-// Better Upgrades: keep original max levels; customize first three costs
-// Costs for Better: [100, 120, 1000, ...rest as before]
-const blueBetterCosts = [
-    50, 75, 150, 250, 400, 700, 1000, 2000, 4000, 7000, 12000, 20000, 35000, 55000, 80000, 120000
-]; // 16 levels total, all in Tires
-// New Blue Upgrade: The Earnings (adds flat +10 scrap per click per level)
-const blueEarningsCosts = [
-    500, 1200, 2500, 4000, 6500, 10000, 15000, 22000, 30000, 40000
-]; // all in Tires
+const BLUE_COST_GROWTH = 1.15;
+const BLUE_BETTER_BASE_COST = 50;   // starts at 50 Tires, +15% each level
+const BLUE_EARNINGS_BASE_COST = 150; // starts at 150 Tires, +15% each level
+const BLUE_TIRES_BASE_COST = 200;   // starts at 200 Tires, +15% each level
 const blueUpgrades = {
     // Better: special total multipliers for the first three levels
     // L0=1.00, L1=1.30, L2=1.35, L3=1.45; from L4 use base increment 0.25 per level
-    better: { level: 0, max: blueBetterCosts.length, multipliers: [1.00, 1.30, 1.35, 1.45], baseIncrement: 0.25 },
+    better: { level: 0, max: 16, multipliers: [1.00, 1.30, 1.35, 1.45], baseIncrement: 0.25 },
     // The Tires upgrade (now multi-level)
     tires: { level: 0, max: 30, perLevelBonus: 2 },
     earnings: { level: 0, max: 10, scrapPerLevel: 10 }
 };
 // expose for UI readout
 window.blueUpgrades = blueUpgrades;
-// Costs for The Tires upgrade levels 1..30 (progressively large)
-const blueTiresCosts = [
-    200, 400, 800, 1200, 2000, 3000, 4500, 6500, 9000, 12500,
-    16500, 21000, 26000, 31500, 37500, 44000, 51000, 58500, 66500, 75000,
-    84000, 93500, 103500, 114000, 125000, 137000, 150000, 164000, 179000, 195000
-];
 // Safety clamp in case save had higher level
 if (blueUpgrades.better.level > blueUpgrades.better.max) {
     blueUpgrades.better.level = blueUpgrades.better.max;
@@ -2625,13 +2991,16 @@ if (blueUpgrades.better.level > blueUpgrades.better.max) {
 function getBlueUpgradeCost(key) {
     if (key === 'better') {
         const lvl = blueUpgrades.better.level;
-        return blueBetterCosts[lvl] !== undefined ? blueBetterCosts[lvl] : Infinity;
+        if (lvl >= blueUpgrades.better.max) return Infinity;
+        return Math.round(BLUE_BETTER_BASE_COST * Math.pow(BLUE_COST_GROWTH, lvl));
     } else if (key === 'tires') {
         const lvl = blueUpgrades.tires.level;
-        return blueTiresCosts[lvl] !== undefined ? blueTiresCosts[lvl] : Infinity;
+        if (lvl >= blueUpgrades.tires.max) return Infinity;
+        return Math.round(BLUE_TIRES_BASE_COST * Math.pow(BLUE_COST_GROWTH, lvl));
     } else if (key === 'earnings') {
         const lvl = blueUpgrades.earnings.level;
-        return blueEarningsCosts[lvl] !== undefined ? blueEarningsCosts[lvl] : Infinity;
+        if (lvl >= blueUpgrades.earnings.max) return Infinity;
+        return Math.round(BLUE_EARNINGS_BASE_COST * Math.pow(BLUE_COST_GROWTH, lvl));
     }
     return Infinity;
 }
@@ -2662,10 +3031,10 @@ function calculateTotalScrap() {
     }
     const additive = scrapPerClick + baseBarrelBonus + sumBarrelLevels + earningsFlat;
     let total = additive * getClickMultiplier();
-    // Star Power tree upgrade: now multiplies final scrap per click by 1.10^rebirthCount when purchased
+    // Star Power tree upgrade: multiplies final scrap per click by 1.05^rebirthCount when purchased
     const starPower = treeUpgrades.find(t => t.name === 'Star Power');
     if (starPower && starPower.level > 0 && rebirthCount > 0) {
-    total *= Math.pow(1.10, rebirthCount); // 1.10^rebirths (~+10% per rebirth)
+        total *= Math.pow(1.05, rebirthCount); // 1.05^rebirths (~+5% per rebirth)
     }
     return total;
 }
@@ -2696,8 +3065,11 @@ function applyBarrelHighlight() {
 let bricks = 0;
 let masterTokens = 0;
 const barrelLevels = [0, 0, 0, 0, 0, 0, 0, 0, 0]; // added barrels 6,7,8
-const barrelMaxLevel = 5; // per barrel cap unchanged
-const barrelCosts = [1, 2, 4, 8, 16, 32, 64, 128, 256];
+const BASE_BARREL_MAX_LEVEL = 5;
+const BUFFED_BARREL_MAX_LEVEL = 10;
+let barrelMaxLevel = BASE_BARREL_MAX_LEVEL;
+const INITIAL_BARREL_COSTS = [1, 2, 4, 8, 16, 32, 64, 128, 256];
+const barrelCosts = INITIAL_BARREL_COSTS.slice();
 
 // Tree upgrades system
 //const treeUpgrades = [false]; // false = nie kupione, true = kupione
@@ -2734,14 +3106,73 @@ const treeUpgrades = [
         rebirth: 12, price: 0, brickPrice: 50, scrapPrice: 50000, level: 0, maxLevel: 1
     },
     {
-    img: 'star.png', name: 'Star Power', desc: 'Each Rebirth gives +10% Scrap gain (multiplicative).',
+    img: 'star.png', name: 'Star Power', desc: 'Each Rebirth gives +5% Scrap gain (multiplicative).',
         rebirth: 0, price: 300, scrapPrice: 10000000, brickPrice: 0, tilesPrice: 1400, level: 0, maxLevel: 1
     },
     {
         img: 'master.png', name: 'Master Tokens Storm', desc: '3.5% chance Storm becomes a Master Token Storm. Each collected token grants +10 Master Tokens.',
         rebirth: 0, price: 60, scrapPrice: 0, brickPrice: 0, tilesPrice: 0, level: 0, maxLevel: 1
     },
+    {
+    img: 'mysterybook.png',
+        name: 'ScrapYard Mastery',
+    desc: 'Unlocks Scrapyard Mastery training. Each level reduces Rebirth cost by 0.20%.',
+        rebirth: 0,
+        price: 450,
+        scrapPrice: 12000000,
+        brickPrice: 0,
+        tilesPrice: 2000,
+        level: 0,
+        maxLevel: 1,
+        path: [7]
+    },
+    {
+        img: 'mysterybook.png',
+        name: 'Buffed Barrels',
+        desc: 'Extends Mystery Book barrel cap to level 10',
+        rebirth: 0,
+        price: 0,
+        scrapPrice: 15000000,
+        brickPrice: 0,
+        tilesPrice: 2000,
+        level: 0,
+        maxLevel: 1,
+        path: [7]
+    },
 ];
+
+function isBuffedBarrelsUnlocked() {
+    return !!(treeUpgrades[10] && treeUpgrades[10].level > 0);
+}
+
+function getBuffedBarrelMultiplier(levelAchieved) {
+    if (!isBuffedBarrelsUnlocked()) return 2;
+    if (levelAchieved < 5) return 2;
+    if (levelAchieved < 7) return 1.8;
+    if (levelAchieved < 9) return 1.6;
+    return 1.5;
+}
+
+function calculateBarrelCostForLevel(index, level) {
+    let cost = INITIAL_BARREL_COSTS[index] || 1;
+    for (let lvl = 1; lvl <= level; lvl++) {
+        cost = Math.ceil(cost * getBuffedBarrelMultiplier(lvl));
+    }
+    return cost;
+}
+
+function refreshBarrelCost(index) {
+    barrelCosts[index] = calculateBarrelCostForLevel(index, barrelLevels[index] || 0);
+}
+
+function refreshAllBarrelCosts() {
+    for (let i = 0; i < barrelCosts.length; i++) refreshBarrelCost(i);
+}
+
+function updateBarrelMaxLevelFromTree() {
+    barrelMaxLevel = isBuffedBarrelsUnlocked() ? BUFFED_BARREL_MAX_LEVEL : BASE_BARREL_MAX_LEVEL;
+    refreshAllBarrelCosts();
+}
 
 var selectedTreeUpgrade = 0;
 
@@ -3086,6 +3517,99 @@ function updateMasterTokenUI() {
     }
 }
 
+function updateScrapyardMasteryUI() {
+    const unlocked = isScrapyardMasteryUnlocked();
+    const reductionPercent = getScrapyardMasteryReductionPercent().toFixed(2);
+
+    if (scrapyardMasteryIcon) {
+        scrapyardMasteryIcon.classList.toggle('hidden', !unlocked);
+        const title = unlocked
+            ? `Scrapyard Mastery: -${reductionPercent}% Rebirth cost`
+            : 'Unlock Scrapyard Mastery in the Tree to train it.';
+        scrapyardMasteryIcon.setAttribute('title', title);
+    }
+
+    if (scrapyardMasteryBadge) {
+        if (unlocked) {
+            scrapyardMasteryBadge.textContent = `-${reductionPercent}%`;
+            scrapyardMasteryBadge.style.display = 'inline-block';
+        } else {
+            scrapyardMasteryBadge.style.display = 'none';
+        }
+    }
+
+    if (scrapyardMasteryTierLabel) {
+        scrapyardMasteryTierLabel.textContent = `Tier: ${scrapyardMasteryTier}/${SCRAPYARD_MASTERY_TIER_MAX}`;
+    }
+    if (scrapyardMasteryLevelLabel) {
+        scrapyardMasteryLevelLabel.textContent = `Level: ${scrapyardMasteryLevel}`;
+    }
+    if (scrapyardMasteryReductionLabel) {
+        scrapyardMasteryReductionLabel.textContent = `Rebirth Cost Bonus: -${reductionPercent}%`;
+    }
+    if (scrapyardMasteryMultiplierLabel) {
+        const nextLevelIndex = scrapyardMasteryLevel + 1;
+        const nextMultiplier = getScrapyardMasteryLevelMultiplier(nextLevelIndex);
+        scrapyardMasteryMultiplierLabel.textContent = `Next Level Cost Multiplier: x${nextMultiplier.toFixed(2)}`;
+    }
+    const tierCost = getScrapyardMasteryTierCost();
+    if (scrapyardMasteryCostLabel) {
+        scrapyardMasteryCostLabel.textContent = `Cost per Tier: ${tierCost.toLocaleString()} Scrap`;
+        if (unlocked) {
+            scrapyardMasteryCostLabel.classList.toggle('insufficient', scraps < tierCost);
+        } else {
+            scrapyardMasteryCostLabel.classList.remove('insufficient');
+        }
+    }
+    if (scrapyardMasteryButton) {
+        scrapyardMasteryButton.disabled = !unlocked;
+    }
+    if (!unlocked && scrapyardMasteryWindow && scrapyardMasteryWindow.classList.contains('active')) {
+        closeScrapyardMasteryWindow();
+    }
+}
+
+function openScrapyardMasteryWindow() {
+    if (!isScrapyardMasteryUnlocked() || !scrapyardMasteryWindow) return;
+    scrapyardMasteryWindow.classList.remove('hidden');
+    scrapyardMasteryWindow.classList.add('active');
+    updateScrapyardMasteryUI();
+}
+
+function closeScrapyardMasteryWindow() {
+    if (!scrapyardMasteryWindow) return;
+    scrapyardMasteryWindow.classList.add('hidden');
+    scrapyardMasteryWindow.classList.remove('active');
+}
+
+function attemptScrapyardMasteryTier() {
+    if (!isScrapyardMasteryUnlocked()) return;
+    const tierCost = getScrapyardMasteryTierCost();
+    if (scraps < tierCost) {
+        if (scrapyardMasteryCostLabel) scrapyardMasteryCostLabel.classList.add('insufficient');
+        alert(`You need ${tierCost.toLocaleString()} Scrap to train a tier.`);
+        return;
+    }
+
+    scraps -= tierCost;
+    if (scrapyardMasteryCostLabel) scrapyardMasteryCostLabel.classList.remove('insufficient');
+    scrapyardMasteryTier += 1;
+    if (scrapyardMasteryTier >= SCRAPYARD_MASTERY_TIER_MAX) {
+        scrapyardMasteryTier = 0;
+        scrapyardMasteryLevel += 1;
+        scrapyardMasteryTierCostCache.clear();
+        console.log(`🏗️ Scrapyard Mastery leveled up! Level ${scrapyardMasteryLevel} (-${getScrapyardMasteryReductionPercent().toFixed(2)}% rebirth cost).`);
+    } else {
+        console.log(`⚙️ Scrapyard Mastery tier ${scrapyardMasteryTier}/${SCRAPYARD_MASTERY_TIER_MAX}.`);
+    }
+
+    persistScrapyardMasteryProgress();
+    updateScrapCounter();
+    updateScrapyardMasteryUI();
+    updateRebirthUI();
+    if (typeof saveSystem !== 'undefined') saveSystem.saveGame();
+}
+
 function updateMysteryBookUI() {
     document.querySelectorAll('.mysterybook-item').forEach((item, index) => {
         const levelElement = item.querySelector('.mysterybook-level');
@@ -3109,6 +3633,11 @@ function updateMysteryBookUI() {
             button.disabled = barrelLevels[index] >= barrelMaxLevel || masterTokens < barrelCosts[index];
         }
     });
+    if (scrapyardStatusIcon) {
+        const hasScrapyardMystery = (barrelLevels[0] || 0) > 0;
+        scrapyardStatusIcon.classList.toggle('hidden', !hasScrapyardMystery);
+    }
+    updateScrapyardMasteryUI();
 }
 
 function updateGreenUpgradeBonus(index) {
@@ -3132,7 +3661,7 @@ function handleMysteryBookUpgrade(index) {
             if (STATS) STATS.masterTokensSpent += cost;
             masterTokens -= cost;
             barrelLevels[index]++;
-            barrelCosts[index] *= 2; // Double the cost for next upgrade
+            refreshBarrelCost(index); // Recalculate cost based on current scaling tier
             updateMasterTokenUI();
             updateMysteryBookUI();
             updateGreenUpgradeBonus(index); // Update greenupgrade bonus
@@ -3164,10 +3693,11 @@ function handleTilesUpgrade() {
 
 // Tree functions
 function updateTreeUI() {
+    updateBarrelMaxLevelFromTree();
     // Render each upgrade into its fixed slot to match the SVG lines
-    const slots = [0,1,2,3,4,5,6,7,8];
+    const slots = [0,1,2,3,4,5,6,7,8,9,10];
     // Direct mapping now aligns with numeric slot order
-    const SLOT_FOR = { 0:0, 1:1, 2:2, 3:3, 4:4, 5:5, 6:6, 7:7, 8:8 };
+    const SLOT_FOR = { 0:0, 1:1, 2:2, 3:3, 4:4, 5:5, 6:6, 7:7, 8:8, 9:9, 10:10 };
     // Clear previous items
     slots.forEach(i => {
         const slot = document.getElementById(`slot-${i}`);
@@ -3219,6 +3749,9 @@ function getTreeItemClass(index) {
             return treeUpgrades[5].level > 0 ? 'available' : 'locked';
         case 7: // Star Power - requires Brick Storm AND Master Tokens Storm
             return (treeUpgrades[6].level > 0 && treeUpgrades[8].level > 0) ? 'available' : 'locked';
+        case 9: // ScrapYard Mastery - requires Star Power
+    case 10: // Buffed Barrels - requires Star Power
+            return treeUpgrades[7].level > 0 ? 'available' : 'locked';
         default:
             return 'locked';
     }
@@ -3248,7 +3781,6 @@ function updateTreeInfoWindow(index) {
     // Check special requirements for upgrades
     let canAfford = true;
     let requirementText = `Required: ${upg.rebirth} Rebirth`;
-    
     if (index === 0) { // Better Scrapyard
         requirementText += `, Scrapyard, ${upg.brickPrice} Brick, ${upg.scrapPrice} Scrap`;
         canAfford = scrapyardPurchased && bricks >= upg.brickPrice && scraps >= upg.scrapPrice;
@@ -3278,6 +3810,12 @@ function updateTreeInfoWindow(index) {
     } else if (upg.name === 'Star Power') {
         requirementText += `, requires Brick Storm & Master Tokens Storm, ${upg.scrapPrice.toLocaleString()} Scrap, ${upg.tilesPrice} Tires, ${upg.price} Master Tokens`;
         canAfford = (treeUpgrades[6] && treeUpgrades[6].level > 0) && (treeUpgrades[8] && treeUpgrades[8].level > 0) && scraps >= (upg.scrapPrice||0) && tiles >= (upg.tilesPrice||0) && masterTokens >= upg.price;
+    } else if (upg.name === 'ScrapYard Mastery') {
+        requirementText += `, requires Star Power, ${upg.scrapPrice.toLocaleString()} Scrap, ${upg.tilesPrice} Tires, ${upg.price} Master Tokens`;
+        canAfford = (treeUpgrades[7] && treeUpgrades[7].level > 0) && scraps >= (upg.scrapPrice||0) && tiles >= (upg.tilesPrice||0) && masterTokens >= (upg.price||0);
+    } else if (upg.name === 'Buffed Barrels') {
+        requirementText += `, requires Star Power, ${upg.scrapPrice.toLocaleString()} Scrap, ${upg.tilesPrice} Tires`;
+        canAfford = (treeUpgrades[7] && treeUpgrades[7].level > 0) && scraps >= (upg.scrapPrice||0) && tiles >= (upg.tilesPrice||0) && masterTokens >= (upg.price||0);
     } else {
         requirementText += `, ${upg.price} Master Tokens`;
         canAfford = masterTokens >= upg.price;
@@ -3306,6 +3844,7 @@ function updateTreeInfoWindow(index) {
     
     // Pokaż przycisk upgrade - zawsze widoczny, ale zmienia stan
     if (treeInfoBuyBtn) {
+        treeInfoBuyBtn.removeAttribute('data-state');
         if (upg.level >= upg.maxLevel) {
             // Już kupiony
             treeInfoBuyBtn.textContent = "Bought";
@@ -3333,6 +3872,10 @@ function updateTreeInfoWindow(index) {
                 treeInfoBuyBtn.textContent = `Buy for ${upg.price} Master Tokens`;
             } else if (upg.name === 'Star Power') {
                 treeInfoBuyBtn.textContent = `Buy for ${upg.scrapPrice.toLocaleString()} Scrap + ${upg.tilesPrice} Tires + ${upg.price} Master Tokens`;
+            } else if (upg.name === 'ScrapYard Mastery') {
+                treeInfoBuyBtn.textContent = `Buy for ${upg.scrapPrice.toLocaleString()} Scrap + ${upg.tilesPrice} Tires + ${upg.price} Master Tokens`;
+            } else if (upg.name === 'Buffed Barrels') {
+                treeInfoBuyBtn.textContent = `Buy for ${upg.scrapPrice.toLocaleString()} Scrap + ${upg.tilesPrice} Tires`;
             } else {
                 treeInfoBuyBtn.textContent = `Buy for ${upg.price} Master Tokens`;
             }
@@ -3359,6 +3902,10 @@ function updateTreeInfoWindow(index) {
                 treeInfoBuyBtn.textContent = `Buy for ${upg.price} Master Tokens`;
             } else if (upg.name === 'Star Power') {
                 treeInfoBuyBtn.textContent = `Buy for ${upg.scrapPrice.toLocaleString()} Scrap + ${upg.tilesPrice} Tires + ${upg.price} Master Tokens`;
+            } else if (upg.name === 'ScrapYard Mastery') {
+                treeInfoBuyBtn.textContent = `Buy for ${upg.scrapPrice.toLocaleString()} Scrap + ${upg.tilesPrice} Tires + ${upg.price} Master Tokens`;
+            } else if (upg.name === 'Buffed Barrels') {
+                treeInfoBuyBtn.textContent = `Buy for ${upg.scrapPrice.toLocaleString()} Scrap + ${upg.tilesPrice} Tires`;
             } else {
                 treeInfoBuyBtn.textContent = `Buy for ${upg.price} Master Tokens`;
             }
@@ -3370,6 +3917,110 @@ function updateTreeInfoWindow(index) {
 
 function handleTreeUpgrade(index) {
     let upg = treeUpgrades[index];
+
+    if (index === 9) {
+        const starPowerUnlocked = treeUpgrades[7] && treeUpgrades[7].level > 0;
+        if (!starPowerUnlocked) {
+            alert('Unlock Star Power first!');
+            return;
+        }
+        if (upg.level >= upg.maxLevel) {
+            alert('Scrapyard Mastery is already unlocked!');
+            return;
+        }
+
+        const costScrap = upg.scrapPrice || 0;
+        const costTiles = upg.tilesPrice || 0;
+        const costTokens = upg.price || 0;
+        if ((scraps || 0) < costScrap) {
+            alert('You don\'t have enough Scrap! Need: ' + costScrap.toLocaleString());
+            return;
+        }
+        if ((tiles || 0) < costTiles) {
+            alert('You don\'t have enough Tires! Need: ' + costTiles);
+            return;
+        }
+        if ((masterTokens || 0) < costTokens) {
+            alert('You don\'t have enough Master Tokens! Need: ' + costTokens);
+            return;
+        }
+
+        if (STATS) {
+            STATS.scrapSpent += costScrap;
+            STATS.tilesSpent = (STATS.tilesSpent || 0) + costTiles;
+            STATS.masterTokensSpent += costTokens;
+        }
+        scraps -= costScrap;
+        tiles -= costTiles;
+        masterTokens -= costTokens;
+
+        upg.level = upg.maxLevel;
+        if (treeInfoBuyBtn) treeInfoBuyBtn.classList.add('hidden');
+        updateScrapCounter();
+        updateTilesUI();
+        updateMasterTokenUI();
+        updateTreeUI();
+        updateScrapyardMasteryUI();
+        if (typeof updateMysteryBookUI === 'function') updateMysteryBookUI();
+        if (typeof updateRebirthUI === 'function') updateRebirthUI();
+        if (typeof saveSystem !== 'undefined') {
+            try { saveSystem.saveGame(); } catch {}
+        }
+        console.log('🏗️ Scrapyard Mastery unlocked. Training available.');
+        return;
+    }
+
+    if (index === 10) {
+        const starPowerUnlocked = treeUpgrades[7] && treeUpgrades[7].level > 0;
+        if (!starPowerUnlocked) {
+            alert('Unlock Star Power first!');
+            return;
+        }
+        if (upg.level >= upg.maxLevel) {
+            alert('Buffed Barrels upgrade already purchased!');
+            return;
+        }
+
+        const costScrap = upg.scrapPrice || 0;
+        const costTiles = upg.tilesPrice || 0;
+        const costTokens = upg.price || 0;
+        if ((scraps || 0) < costScrap) {
+            alert('You don\'t have enough Scrap! Need: ' + costScrap.toLocaleString());
+            return;
+        }
+        if ((tiles || 0) < costTiles) {
+            alert('You don\'t have enough Tires! Need: ' + costTiles);
+            return;
+        }
+        if ((masterTokens || 0) < costTokens) {
+            alert('You don\'t have enough Master Tokens! Need: ' + costTokens);
+            return;
+        }
+
+        if (STATS) {
+            STATS.scrapSpent += costScrap;
+            STATS.tilesSpent = (STATS.tilesSpent || 0) + costTiles;
+            STATS.masterTokensSpent += costTokens;
+        }
+        scraps -= costScrap;
+        tiles -= costTiles;
+        masterTokens -= costTokens;
+
+        upg.level = upg.maxLevel;
+        updateBarrelMaxLevelFromTree();
+        if (treeInfoBuyBtn) treeInfoBuyBtn.classList.add('hidden');
+        updateScrapCounter();
+        updateTilesUI();
+        updateMasterTokenUI();
+        updateMysteryBookUI();
+        refreshAllBarrelCosts();
+        updateTreeUI();
+        console.log('📚 Buffed Barrels unlocked! Mystery Book barrels can now reach level 10 with softened scaling.');
+        if (typeof saveSystem !== 'undefined') {
+            try { saveSystem.saveGame(); } catch {}
+        }
+        return;
+    }
 
     if (index === 0) { // Better Scrapyard - special requirements
         if (rebirthCount >= upg.rebirth && scrapyardPurchased && bricks >= upg.brickPrice && scraps >= upg.scrapPrice && upg.level < upg.maxLevel) {
@@ -3636,7 +4287,7 @@ function handleTreeUpgrade(index) {
             updateTilesUI();
             if (counter) updateScrapCounter();
             updateTreeUI();
-            console.log('⭐ Star Power acquired! 1.10^rebirth (~+10% per rebirth) Scrap multiplier active.');
+            console.log('⭐ Star Power acquired! 1.05^rebirth (~+5% per rebirth) Scrap multiplier active.');
         }
     } else {
         // Standard tree upgrade with Master Tokens
@@ -3649,6 +4300,7 @@ function handleTreeUpgrade(index) {
             treeInfoBuyBtn.classList.add('hidden');
             updateMasterTokenUI();
             updateTreeUI();
+            if (typeof updateMysteryBookUI === 'function') updateMysteryBookUI();
 
             // log
             console.log('🌳 Tree upgrade ' + index + ' purchased! ' + upg.name + ' unlocked!');
@@ -3710,6 +4362,8 @@ scrapImage.addEventListener('click', () => {
     if (counter) updateScrapCounter();
     if (typeof checkUpgradeUnlock === 'function') checkUpgradeUnlock();
     if (typeof updateScrapyardUI === 'function') updateScrapyardUI();
+    // Prompt a debounced server sync so the leaderboard refreshes more promptly
+    try { requestSyncLeaderboard(800); } catch {}
 
     // Bomblike removed
 
@@ -3821,6 +4475,24 @@ document.getElementById('close-mysterybook').addEventListener('click', () => {
     mysteryBookWindow.classList.remove('active');
     mysteryBookWindow.classList.add('hidden');
 });
+
+if (scrapyardMasteryIcon) {
+    scrapyardMasteryIcon.addEventListener('click', () => {
+        if (scrapyardMasteryIcon.classList.contains('hidden')) return;
+        openScrapyardMasteryWindow();
+    });
+}
+if (scrapyardMasteryButton) {
+    scrapyardMasteryButton.addEventListener('click', attemptScrapyardMasteryTier);
+}
+if (closeScrapyardMastery) {
+    closeScrapyardMastery.addEventListener('click', closeScrapyardMasteryWindow);
+}
+if (scrapyardMasteryWindow) {
+    scrapyardMasteryWindow.addEventListener('click', (e) => {
+        if (e.target === scrapyardMasteryWindow) closeScrapyardMasteryWindow();
+    });
+}
 
 // Inicjalizacja
 updateUpgradeInfo();
@@ -4079,19 +4751,26 @@ const CLOSE_ON_OUTSIDE = [
     { el: rebirthWindow, triggerIds: ['star-btn'] },
     { el: greenUpgradeWindow, triggerIds: ['greenupgrade-btn'] },
     { el: document.getElementById('mysterybook-window'), triggerIds: ['mysterybook-btn'] },
+    { el: scrapyardMasteryWindow, triggerIds: ['scrapyard-mastery-icon'] },
     { el: blueUpgradeWindow, triggerIds: ['blueupgrade-btn'] },
     { el: treeWindow, triggerIds: ['tree-btn'] },
     { el: treeInfoWindow, triggerIds: [] },
     { el: document.getElementById('settings-window'), triggerIds: ['settings-btn'] }
 ];
 
+function isTriggerSource(event, ids) {
+    if (!ids || !ids.length) return false;
+    const target = event.target;
+    if (!target || typeof target.closest !== 'function') return false;
+    return ids.some(id => target.closest(`#${id}`));
+}
+
 document.addEventListener('mousedown', (e) => {
     // Jeżeli kliknięto na przycisk otwierający, nie zamykaj (pozwól jego handlerowi zadziałać)
-    const id = e.target && e.target.id;
     for (const cfg of CLOSE_ON_OUTSIDE) {
         if (!cfg.el) continue;
         if (!cfg.el.classList.contains('active')) continue;
-        if (cfg.triggerIds.includes(id)) return; // klik na trigger
+        if (isTriggerSource(e, cfg.triggerIds)) return; // klik na trigger lub jego potomka
         if (cfg.el.contains(e.target)) continue; // klik wewnątrz okna
         // Zamknij okno
         cfg.el.classList.remove('active');
@@ -4101,10 +4780,9 @@ document.addEventListener('mousedown', (e) => {
 
 // Dodatkowy fallback (deploy np. GitHub Pages czasem gubi mousedown przez overlayy / focus)
 function closeOnOutsideGeneric(e) {
-    const id = e.target && e.target.id;
     for (const cfg of CLOSE_ON_OUTSIDE) {
         if (!cfg.el || !cfg.el.classList.contains('active')) continue;
-        if (cfg.triggerIds.includes(id)) return;
+        if (isTriggerSource(e, cfg.triggerIds)) return;
         if (cfg.el.contains(e.target)) return; // wewnątrz – nie zamykaj
     }
     // Jeśli dotarliśmy tutaj – klik poza wszystkimi aktywnymi oknami -> zamknij wszystkie aktywne
@@ -4133,6 +4811,43 @@ bindSettingsHandlers();
             const n = getStoredNick();
             if (n) claimUsernameOnServer(n);
         }
+    } catch {}
+})();
+
+// Periodic ban heartbeat: ping server to detect ban even if user doesn't interact
+(function initBanHeartbeat(){
+    try {
+        const proto = (location && location.protocol || '').toLowerCase();
+        if (proto === 'file:') return; // no backend
+        let timer = null;
+        function tick(){
+            try {
+                if (!isBackendAvailable()) return;
+                if (window.__SM_BANNED) return; // already banned
+                const username = getStoredNick();
+                if (!username) return; // nothing to check until a name is set
+                const payload = { username, clientId: getClientId(), inventory: [] };
+                fetch('/api/player/sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                }).then(async (res) => {
+                    if (!res.ok && res.status === 403) {
+                        disableBackendSyncAfterForbidden('Server sync disabled after heartbeat (403).');
+                        let data = null; try { data = await res.json(); } catch {}
+                        if (data && data.banned) {
+                            window.__SM_BANNED = true;
+                            showBanOverlay(data.message || 'You have been banned for not following the game rules (which do not exist). Please do not play unfairly.');
+                        }
+                    }
+                }).catch(()=>{});
+            } catch {}
+        }
+        // run soon after load and then every 30s
+        setTimeout(tick, 2000);
+        timer = setInterval(tick, 30000);
+        // keep reference if we ever want to clear later
+        window.__SM_BAN_TIMER = timer;
     } catch {}
 })();
 
@@ -4172,3 +4887,4 @@ bindSettingsHandlers();
     const pal = document.getElementById('settings-palette');
     if (pal) pal.addEventListener('click', (e) => { e.stopPropagation(); nextTheme(); });
 })();
+
