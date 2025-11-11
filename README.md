@@ -10,8 +10,3 @@ But What you can do....?
 - Discover New Upgrades
 
 Created By **d0ktorek**, Creator of the icon: **Schrottii**.
-
-## Save Exports
-- Signed save files now include an integrity hash generated during export.
-- Importing a save that was modified manually will be rejected with a hash mismatch warning.
-- Legacy plaintext exports are still accepted, but re-export to benefit from the new protection.
